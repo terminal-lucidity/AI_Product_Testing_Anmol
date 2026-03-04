@@ -6,13 +6,14 @@ Library                 DateTime
 Library                 Collections
 Library                 ../resources/custom_keywords.py
 Suite Setup             Setup Browser And Login
+Test Setup              Create Clean Chat Session
 Suite Teardown          Close All Browsers
 
 *** Variables ***
 ${BASE_URL}                 https://robotic.copado.com/ai
 ${WORKSPACE_NAME}           robotic testing    
 
-# Robust Locators from Reference Script
+# Robust Locators
 ${PROMPT_INPUT}             xpath=//div[@id="ai-prompt-input"]
 ${PROMPT_SEND}              xpath=//button[@id="ai-prompt-send"]
 ${DISABLE_PROMPT_SEND}      xpath=//button[@id="ai-prompt-send" and @disabled]
@@ -30,46 +31,35 @@ TC001 - Test Basic Dialogue And Relevance
 TC002 - Test Multi-Turn Conversation Context Retention
     [Documentation]    Verifies the AI agent remembers context (a provided code snippet) across multiple turns.
     [Tags]             ai_context
-    
-    # Turn 1: Provide the actual code context so the AI has something to work with
     Send Prompt And Wait    Here is my custom Apex class: public class TaxCalculator { public static Decimal getTax(Decimal amount) { return amount * 0.1; } }
-    
-    # Turn 2: Follow-up question relying entirely on the context established in Turn 1
     Send Prompt And Wait    Write a complete Apex unit test for that exact class.
     ${response}=            Get Last AI Response
-    
-    # Verify it remembered the specific class name from turn 1
     Should Contain          ${response}    TaxCalculator    ignore_case=True
-    
-    # Let's also use our new Python keyword to prove it actually wrote the code this time!
     Validate Code Snippet Present    ${response}    apex
 
 TC003 - Test Response Formatting For Code Requests
-    [Documentation]    Ensures the AI returns properly formatted code blocks by verifying DOM rendering.
+    [Documentation]    Ensures the AI returns code by validating language-specific syntax presence.
     [Tags]             ai_formatting
     Send Prompt And Wait    Write a Salesforce Apex trigger on the Account object that sets the Rating field to 'Hot' before insert if the AnnualRevenue is greater than 100000.
-    
-    # We bypass the text parser entirely and verify the DOM actually rendered a code container.
-    # Most markdown parsers output <pre> or <code> tags for code blocks.
-    ${code_block_xpath}=    Set Variable    xpath=(//div[contains(@class, 'ai-message')])[last()]//pre | (//div[contains(@class, 'ai-message')])[last()]//code
-    VerifyElement           ${code_block_xpath}    timeout=10s
-    Log                     ✓ Code block HTML tags successfully rendered in the UI    console=True
+    ${response}=            Get Last AI Response
+    Validate Code Snippet Present    ${response}    apex
 
 TC004 - Test Edge Case And Invalid Input Handling
     [Documentation]    Sends garbage special characters and verifies graceful handling without system crashes.
     [Tags]             ai_edge
     Send Prompt And Wait    ___$$$!!!@@@
     ${response}=            Get Last AI Response
-    
-    # Custom Python Validation to ensure no raw stack traces or system exceptions are shown to the user
     Validate Graceful Error Handling    ${response}
 
-TC005 - Test AI Performance With Data-Driven Prompts
-    [Documentation]    Uses a FOR loop and test data array to measure response times against an SLA.
+TC005 - Test AI Performance With Complex Data-Driven Prompts
+    [Documentation]    Uses a FOR loop and complex architectural scenarios to stress-test response times and generation limits.
     [Tags]             ai_performance    data_driven
     
-    # Data-driven test data (embedded array)
-    @{PROMPTS}=             Create List    What is CI/CD?    Explain metadata API    Compare Ant and SFDX
+    # Advanced, multi-layered architectural prompts
+    @{PROMPTS}=             Create List    
+    ...    Design a Salesforce CI/CD Git branching strategy for an enterprise with 3 parallel development streams and a strict hotfix routing requirement.
+    ...    Compare the security and performance implications of using 'With Sharing' versus 'Without Sharing' in a Batch Apex class processing PII data.
+    ...    Write a secure Salesforce Lightning Web Component (LWC) that queries Account data using an imperative Apex call, including proper error handling and wire decorators.
     
     FOR    ${prompt}    IN    @{PROMPTS}
         ${start_time}=      Get Current Date    result_format=epoch
@@ -78,13 +68,28 @@ TC005 - Test AI Performance With Data-Driven Prompts
         
         ${end_time}=        Get Current Date    result_format=epoch
         
-        # Custom Python Validation (Fails if calculation takes > 25 seconds)
-        Calculate And Validate Performance    ${start_time}    ${end_time}    25
+        # We might need a slightly higher SLA (e.g., 35 seconds) because architectural generation takes heavy compute power
+        Calculate And Validate Performance    ${start_time}    ${end_time}    35
     END
-
+TC006 - Test Complex Troubleshooting Analysis
+    [Documentation]    Feeds the AI a complex system error with context constraints and validates multi-part reasoning.
+    [Tags]             ai_reasoning    complex_prompt
+    
+    # A complex, multi-layered prompt mimicking a real senior developer scenario
+    ${complex_prompt}=      Set Variable    Analyze this Salesforce deployment error: "System.LimitException: Too many SOQL queries: 101" occurring in an Account trigger during a bulk data load. Explain the exact root cause, identify the violated best practice, and provide a bulkified Apex code solution using a Map.
+    
+    Send Prompt And Wait    ${complex_prompt}
+    ${response}=            Get Last AI Response
+    
+    # 1. Validate Semantic Reasoning: Did it figure out *why* it broke?
+    @{expected_reasoning}=  Create List    bulkification    loop    map    limit
+    Validate Ai Relevance   ${response}    ${expected_reasoning}
+    
+    # 2. Validate Code Execution: Did it actually write the fix?
+    Validate Code Snippet Present    ${response}    apex
 *** Keywords ***
 Setup Browser And Login
-    [Documentation]    Opens the browser, navigates to the app, and handles the Okta/Google login flow.
+    [Documentation]    Logs in and navigates to the workspace (runs once per suite).
     Open Browser       about:blank    chrome    --guest
     GoTo               ${BASE_URL}
     VerifyText         Log in to Copado
@@ -101,14 +106,21 @@ Setup Browser And Login
     VerifyText         Welcome           timeout=60s
     ClickText          ${WORKSPACE_NAME}
 
+Create Clean Chat Session
+    [Documentation]    Opens a fresh chat and ensures the general DevOps expert is selected.
+    ClickText          Create new chat    timeout=10s
+    Sleep              2s
+    ${is_expert}=      Run Keyword And Return Status    VerifyText    Copado Expert    timeout=2s
+    IF  '${is_expert}' == 'False'
+        ClickText      Copado Test Agent
+        ClickText      Copado Expert
+    END
 Send Prompt And Wait
     [Arguments]        ${message}
     [Documentation]    Types a message, clicks send, and waits reliably for the AI to finish generating.
     ClickElement       ${PROMPT_INPUT}
     TypeText           ${PROMPT_INPUT}             ${message}
     ClickElement       ${PROMPT_SEND}              timeout=20
-    
-    # Wait logic adapted from reference script for maximum stability
     VerifyText         Stop generating             timeout=20
     VerifyNoElement    ${DISABLE_PROMPT_SEND}      timeout=220s    delay=5s
 
