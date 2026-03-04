@@ -46,15 +46,21 @@ class custom_keywords:
         return elapsed_time
 
     # Keyword 4: Validates Code Generation (TC003)
-    def validate_code_snippet_present(self, response_text, language="apex"):
+    def validate_code_snippet_present(self, response_text, expected_type="class"):
         response_lower = response_text.lower()
-        if language.lower() == "apex":
+        
+        if expected_type.lower() == "trigger":
             code_markers = ["trigger ", " on ", "{", "}", ";"]
-            missing_markers = [marker for marker in code_markers if marker not in response_lower]
-            if len(missing_markers) > 1:
-                error_msg = f"Expected Apex code snippet not found. Missing syntax markers: {missing_markers}"
-                logger.error(error_msg)
-                raise AssertionError(error_msg)
-                
-        logger.info(f"Code snippet for {language} successfully identified in the response text.")
+        elif expected_type.lower() == "class":
+            code_markers = ["class ", "{", "}", ";"]
+        else:
+            code_markers = ["{", "}"] # Fallback
+            
+        missing_markers = [marker for marker in code_markers if marker not in response_lower]
+        if len(missing_markers) > 1:
+            error_msg = f"Expected {expected_type} code snippet not found. Missing syntax markers: {missing_markers}"
+            logger.error(error_msg)
+            raise AssertionError(error_msg)
+            
+        logger.info(f"Code snippet for {expected_type} successfully identified in the response text.")
         return True
