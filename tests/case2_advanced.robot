@@ -5,13 +5,12 @@ Library                 BuiltIn
 Library                 DateTime
 Library                 Collections
 Library                 ../resources/custom_keywords.py
-Suite Setup             Setup Browser And Navigate To Chat
+Suite Setup             Setup Browser And Login
 Suite Teardown          Close All Browsers
 
 *** Variables ***
 ${BASE_URL}                 https://robotic.copado.com/ai
-${C_EMAIL}                  your_email@example.com
-${C_PASSWORD}               your_password
+${WORKSPACE_NAME}           robotic testing    
 
 # Robust Locators from Reference Script
 ${PROMPT_INPUT}             xpath=//div[@id="ai-prompt-input"]
@@ -25,8 +24,6 @@ TC001 - Test Basic Dialogue And Relevance
     [Tags]             ai_core
     Send Prompt And Wait    What is Salesforce Copado used for?
     ${response}=            Get Last AI Response
-    
-    # Custom Python Validation to ensure semantic relevance, not just exact string matching
     @{expected_words}=      Create List    devops    deployment    salesforce
     Validate Ai Relevance   ${response}    ${expected_words}
 
@@ -34,27 +31,22 @@ TC002 - Test Multi-Turn Conversation Context Retention
     [Documentation]    Verifies the AI agent remembers context from previous messages in the same thread.
     [Tags]             ai_context
     Send Prompt And Wait    I have a custom Apex class called "TaxCalculator".
-    
-    # Follow-up question relying on previous context
     Send Prompt And Wait    Write a basic unit test for it.
     ${response}=            Get Last AI Response
-    
-    # Verify it remembered the specific class name from turn 1
     Should Contain          ${response}    TaxCalculator    ignore_case=True
 
 TC003 - Test Response Formatting For Code Requests
     [Documentation]    Ensures the AI returns properly formatted markdown code blocks when asked for code.
     [Tags]             ai_formatting
-    Send Prompt And Wait    Write a simple Salesforce Apex trigger on the Account object.
+    Send Prompt And Wait    Write a Salesforce Apex trigger on the Account object that sets the Rating field to 'Hot' before insert if the AnnualRevenue is greater than 100000.
     ${response}=            Get Last AI Response
     
-    # Custom Python Validation to check for '```' markdown syntax
     Verify Code Block Formatting    ${response}
 
 TC004 - Test Edge Case And Invalid Input Handling
     [Documentation]    Sends garbage special characters and uses IF/ELSE to verify graceful handling without system crashes.
     [Tags]             ai_edge
-    Send Prompt And Wait    ###___$$$!!!@@@
+    Send Prompt And Wait    ___$$$!!!@@@
     ${response}=            Get Last AI Response
     
     # Check if the AI gracefully asks for clarification or rejects it
@@ -86,8 +78,8 @@ TC005 - Test AI Performance With Data-Driven Prompts
     END
 
 *** Keywords ***
-Setup Browser And Navigate To Chat
-    [Documentation]    Logs in and navigates to an active chat session to prepare for testing.
+Setup Browser And Login
+    [Documentation]    Opens the browser, navigates to the app, and handles the Okta/Google login flow.
     Open Browser       about:blank    chrome    --guest
     GoTo               ${BASE_URL}
     VerifyText         Log in to Copado
@@ -102,10 +94,7 @@ Setup Browser And Navigate To Chat
     VerifyText         Okta Verify
     ClickText          Send Push         sleep=60s
     VerifyText         Welcome           timeout=60s
-    
-    # Create a fresh chat for the suite
-    ClickText          Create new chat
-    Sleep              2s
+    ClickText          ${WORKSPACE_NAME}
 
 Send Prompt And Wait
     [Arguments]        ${message}
@@ -120,6 +109,5 @@ Send Prompt And Wait
 
 Get Last AI Response
     [Documentation]    Extracts the text from the most recent AI response bubble.
-    # Standard SeleniumLibrary/QWeb way to extract text from an element
     ${text}=           GetText    ${LAST_AI_MESSAGE}
-    RETURN         ${text}
+    RETURN             ${text}
