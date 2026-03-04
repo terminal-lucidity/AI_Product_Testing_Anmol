@@ -12,7 +12,7 @@ Suite Teardown          Close All Browsers
 ${BASE_URL}             https://robotic.copado.com/ai
 
 *** Test Cases ***
-Create A New Workspace
+TC001: Create A New Workspace
     [Documentation]    Verifies that a user can successfully create a new workspace.
     [Tags]             testgen    workspace_create
     VerifyText         Create Workspace
@@ -25,14 +25,14 @@ Create A New Workspace
     ClickText          Create
     VerifyText         ${WORKSPACE_NAME}    timeout=10s
 
-Verify Workspace Listing And Persistence
+TC002: Verify Workspace Listing And Persistence
     [Documentation]    Verifies that the newly created workspace persists and appears in the workspace list.
     [Tags]             testgen    workspace_listing
     GoTo               ${BASE_URL}
     VerifyText         Welcome
     VerifyText         ${WORKSPACE_NAME}
 
-Delete Workspace And Cleanup
+TC003: Delete Workspace And Cleanup
     [Documentation]    Verifies workspace deletion functionality and ensures test data is properly cleaned up.
     [Tags]             testgen    workspace_delete
     ClickText          ${WORKSPACE_NAME}
