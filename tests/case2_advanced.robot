@@ -28,36 +28,41 @@ TC001 - Test Basic Dialogue And Relevance
     Validate Ai Relevance   ${response}    ${expected_words}
 
 TC002 - Test Multi-Turn Conversation Context Retention
-    [Documentation]    Verifies the AI agent remembers context from previous messages in the same thread.
+    [Documentation]    Verifies the AI agent remembers context (a provided code snippet) across multiple turns.
     [Tags]             ai_context
-    Send Prompt And Wait    I have a custom Apex class called "TaxCalculator".
-    Send Prompt And Wait    Write a basic unit test for it.
-    ${response}=            Get Last AI Response
-    Should Contain          ${response}    TaxCalculator    ignore_case=True
-
-TC003 - Test Response Formatting For Code Requests
-    [Documentation]    Ensures the AI returns properly formatted markdown code blocks when asked for code.
-    [Tags]             ai_formatting
-    Send Prompt And Wait    Write a Salesforce Apex trigger on the Account object that sets the Rating field to 'Hot' before insert if the AnnualRevenue is greater than 100000.
+    
+    # Turn 1: Provide the actual code context so the AI has something to work with
+    Send Prompt And Wait    Here is my custom Apex class: public class TaxCalculator { public static Decimal getTax(Decimal amount) { return amount * 0.1; } }
+    
+    # Turn 2: Follow-up question relying entirely on the context established in Turn 1
+    Send Prompt And Wait    Write a complete Apex unit test for that exact class.
     ${response}=            Get Last AI Response
     
-    Verify Code Block Formatting    ${response}
+    # Verify it remembered the specific class name from turn 1
+    Should Contain          ${response}    TaxCalculator    ignore_case=True
+    
+    # Let's also use our new Python keyword to prove it actually wrote the code this time!
+    Validate Code Snippet Present    ${response}    apex
+
+TC003 - Test Response Formatting For Code Requests
+    [Documentation]    Ensures the AI returns properly formatted code blocks by verifying DOM rendering.
+    [Tags]             ai_formatting
+    Send Prompt And Wait    Write a Salesforce Apex trigger on the Account object that sets the Rating field to 'Hot' before insert if the AnnualRevenue is greater than 100000.
+    
+    # We bypass the text parser entirely and verify the DOM actually rendered a code container.
+    # Most markdown parsers output <pre> or <code> tags for code blocks.
+    ${code_block_xpath}=    Set Variable    xpath=(//div[contains(@class, 'ai-message')])[last()]//pre | (//div[contains(@class, 'ai-message')])[last()]//code
+    VerifyElement           ${code_block_xpath}    timeout=10s
+    Log                     ✓ Code block HTML tags successfully rendered in the UI    console=True
 
 TC004 - Test Edge Case And Invalid Input Handling
-    [Documentation]    Sends garbage special characters and uses IF/ELSE to verify graceful handling without system crashes.
+    [Documentation]    Sends garbage special characters and verifies graceful handling without system crashes.
     [Tags]             ai_edge
     Send Prompt And Wait    ___$$$!!!@@@
     ${response}=            Get Last AI Response
     
-    # Check if the AI gracefully asks for clarification or rejects it
-    ${is_graceful}=         Run Keyword And Return Status    Should Contain    ${response}    clarify    ignore_case=True
-    
-    IF  ${is_graceful} == ${TRUE}
-        Log    ✓ AI handled edge case gracefully by asking for clarification.    console=True
-    ELSE
-        Log    ✓ AI provided a standard fallback response. Checking for exceptions.    console=True
-        Should Not Contain    ${response}    Exception    ignore_case=True  # Ensure no raw system errors leaked
-    END
+    # Custom Python Validation to ensure no raw stack traces or system exceptions are shown to the user
+    Validate Graceful Error Handling    ${response}
 
 TC005 - Test AI Performance With Data-Driven Prompts
     [Documentation]    Uses a FOR loop and test data array to measure response times against an SLA.
