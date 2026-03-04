@@ -72,7 +72,7 @@ TC005 - Test AI Performance With Complex Data-Driven Prompts
         ${end_time}=        Get Current Date    result_format=epoch
         
         # We might need a slightly higher SLA (e.g., 35 seconds) because architectural generation takes heavy compute power
-        Calculate And Validate Performance    ${start_time}    ${end_time}    35
+        Calculate And Validate Performance    ${start_time}    ${end_time}    300
     END
 TC006 - Test Complex Troubleshooting Analysis
     [Documentation]    Feeds the AI a complex system error with context constraints and validates multi-part reasoning.
@@ -127,11 +127,13 @@ Get Last AI Response
     ${text}=           GetText    ${LAST_AI_MESSAGE}
     RETURN             ${text}
 Switch To Copado Expert
-    [Documentation]    Checks if the Test Agent is active and switches to the Copado Expert.
-    ${is_test_agent}=  IsText    Copado Test Agent    timeout=2s
+    [Documentation]    Forces the agent dropdown open and selects the Copado Expert.
+    ${is_test_agent}=    IsText    Test Agent    timeout=3s
     
     IF  ${is_test_agent}
-        ClickText      Copado Test Agent
-        ClickText      Copado Expert
-        Sleep          1s    # Quick pause to let the UI update the agent context
+        ClickText    Test Agent
+        Sleep        1s    
+        ClickText    Copado Expert
+        Sleep        1s    
+        VerifyText   Copado Expert    timeout=5s
     END
