@@ -25,14 +25,21 @@ class custom_keywords:
 
     def verify_code_block_formatting(self, response_text):
         """
-        Checks if the AI correctly formatted code snippets using Markdown formatting (```).
+        Checks if the AI correctly formatted code snippets in the rendered UI.
+        Copado AI's UI renders code blocks by prepending the language name 
+        (e.g., 'APEX', 'BASH', 'JSON') before the code snippet.
         """
-        if "```" not in response_text:
-            error_msg = "Expected Markdown code block formatting (```) was not found in the response."
+        # We check for common code block language headers rendered by the UI
+        expected_ui_markers = ["APEX", "BASH", "JAVA", "XML", "JSON"]
+        
+        has_code_block = any(marker in response_text for marker in expected_ui_markers)
+        
+        if not has_code_block:
+            error_msg = f"Expected a rendered code block, but no language markers (like {expected_ui_markers}) were found in the UI text."
             logger.error(error_msg)
             raise AssertionError(error_msg)
             
-        logger.info("Code block formatting verified.")
+        logger.info("Code block formatting verified in rendered UI.")
         return True
 
     def calculate_and_validate_performance(self, start_time, end_time, max_seconds):
