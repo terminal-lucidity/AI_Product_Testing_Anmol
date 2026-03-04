@@ -5,6 +5,10 @@ Library                 BuiltIn
 *** Variables ***
 ${BASE_URL}                 https://robotic.copado.com/ai
 ${WORKSPACE_NAME}           robotic testing    
+${PROMPT_INPUT}             xpath=//div[@id="ai-prompt-input"]
+${PROMPT_SEND}              xpath=//button[@id="ai-prompt-send"]
+${DISABLE_PROMPT_SEND}      xpath=//button[@id="ai-prompt-send" and @disabled]
+${LAST_AI_MESSAGE}          xpath=(//div[contains(@class, 'ai-message')])[last()]
 
 *** Keywords ***
 Setup Browser And Login
@@ -57,11 +61,15 @@ Select AI Agent
         Sleep           1s    
         VerifyElement   ${dropdown_button}//span[contains(text(), '${first_word}')]    timeout=5s  
     END
-Send Prompt To AI
-    [Documentation]    Clicks the chat box, types the prompt, and hits send.
-    [Arguments]        ${prompt_text}
-    ClickElement       //*[@id='ai-prompt-input']
-    Sleep              0.5s
-    TypeText           locator=//*[@id='ai-prompt-input']    input_text=${prompt_text}
-    ClickElement       //*[@id='ai-prompt-send']
-    Sleep              2s
+Send Prompt And Wait For AI
+    [Documentation]    Types a message, clicks send, and waits dynamically for the AI response to complete. Replaces legacy 'Send Prompt To AI'.
+    [Arguments]        ${message}
+    ClickElement       ${PROMPT_INPUT}
+    TypeText           ${PROMPT_INPUT}             ${message}
+    ClickElement       ${PROMPT_SEND}              timeout=2s
+    VerifyText         Stop generating             timeout=20s
+    VerifyNoElement    ${DISABLE_PROMPT_SEND}      timeout=220s    delay=5s
+Get Last AI Response
+    [Documentation]    Extracts the text from the most recent AI response bubble.
+    ${text}=           GetText    ${LAST_AI_MESSAGE}
+    RETURN             ${text}
