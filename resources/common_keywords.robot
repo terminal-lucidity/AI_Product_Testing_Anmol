@@ -43,15 +43,17 @@ Create Clean Chat Session
     ClickText          Create new chat    timeout=10s
     Sleep              2s
 
+*** Keywords ***
 Select AI Agent
-    [Documentation]    Checks if the specified AI Agent is currently selected in the dropdown. If not, opens the menu and selects it.
+    [Documentation]    Checks if the specified AI Agent is currently selected. If not, opens the menu and selects it.
     [Arguments]        ${agent_name}
-    ${is_agent_selected}=    IsElement    //button[@ngbdropdowntoggle][contains(., '${agent_name}')]    timeout=3s
+    
+    ${is_agent_selected}=    IsElement    //button[contains(., '${agent_name}')]    timeout=3s
     
     IF    not ${is_agent_selected}
-        ClickElement    //button[@ngbdropdowntoggle][.//img]
+        ClickElement    //div[contains(@class, 'chat-input')]//button[1]  # Adjust index if there are multiple buttons, or use //button[.//img]
         Sleep           1s    
         ClickText       ${agent_name}
         Sleep           1s    
-        VerifyElement   //button[@ngbdropdowntoggle][contains(., '${agent_name}')]    timeout=5s  
+        VerifyElement   //button[contains(., '${agent_name}')]    timeout=5s  
     END
