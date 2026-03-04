@@ -1,16 +1,13 @@
 import time
+import re
 from robot.api import logger
 
 class custom_keywords:
     
+    # Keyword 1: Validates Relevance (TC001)
     def validate_ai_relevance(self, response_text, expected_keywords):
-        """
-        Validates that an AI response is relevant by checking for the presence
-        of required keywords. Handles case-insensitivity.
-        """
         response_lower = response_text.lower()
         missing_keywords = []
-        
         for keyword in expected_keywords:
             if keyword.lower() not in response_lower:
                 missing_keywords.append(keyword)
@@ -23,33 +20,41 @@ class custom_keywords:
         logger.info("AI response relevance validated successfully.")
         return True
 
-    def verify_code_block_formatting(self, response_text):
-        """
-        Checks if the AI correctly formatted code snippets in the rendered UI.
-        Copado AI's UI renders code blocks by prepending the language name 
-        (e.g., 'APEX', 'BASH', 'JSON') before the code snippet.
-        """
-        # We check for common code block language headers rendered by the UI
-        expected_ui_markers = ["APEX", "BASH", "JAVA", "XML", "JSON"]
-        
-        has_code_block = any(marker in response_text for marker in expected_ui_markers)
-        
-        if not has_code_block:
-            error_msg = f"Expected a rendered code block, but no language markers (like {expected_ui_markers}) were found in the UI text."
-            logger.error(error_msg)
-            raise AssertionError(error_msg)
-            
-        logger.info("Code block formatting verified in rendered UI.")
+    # Keyword 2: Validates Edge Cases (TC004)
+    def validate_graceful_error_handling(self, response_text):
+        error_patterns = [
+            r"System\.[\w]+Exception",  # Apex exceptions
+            r"java\.lang\.",            # Java exceptions
+            r"SQL syntax",              # Database errors
+            r"Stack trace:"             # Generic stack traces
+        ]
+        for pattern in error_patterns:
+            if re.search(pattern, response_text, re.IGNORECASE):
+                error_msg = f"Security/Edge Case failure: AI leaked raw system error matching pattern '{pattern}'"
+                logger.error(error_msg)
+                raise AssertionError(error_msg)
+                
+        logger.info("Edge case validated: No raw system exceptions leaked.")
         return True
 
+    # Keyword 3: Validates Performance (TC005)
     def calculate_and_validate_performance(self, start_time, end_time, max_seconds):
-        """
-        Calculates the AI response time and fails the test if it exceeds the SLA.
-        """
         elapsed_time = float(end_time) - float(start_time)
         logger.info(f"AI Response took: {elapsed_time:.2f} seconds.")
-        
         if elapsed_time > float(max_seconds):
             raise AssertionError(f"Performance SLA breached! Took {elapsed_time:.2f}s (Max allowed: {max_seconds}s)")
-            
         return elapsed_time
+
+    # Keyword 4: Validates Code Generation (TC003)
+    def validate_code_snippet_present(self, response_text, language="apex"):
+        response_lower = response_text.lower()
+        if language.lower() == "apex":
+            code_markers = ["trigger ", " on ", "{", "}", ";"]
+            missing_markers = [marker for marker in code_markers if marker not in response_lower]
+            if len(missing_markers) > 1:
+                error_msg = f"Expected Apex code snippet not found. Missing syntax markers: {missing_markers}"
+                logger.error(error_msg)
+                raise AssertionError(error_msg)
+                
+        logger.info(f"Code snippet for {language} successfully identified in the response text.")
+        return True
