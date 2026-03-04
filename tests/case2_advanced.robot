@@ -33,7 +33,7 @@ TC001 - Test Basic Dialogue And Relevance
 TC002 - Test Multi-Turn Conversation Context Retention
     [Documentation]    Verifies the AI agent remembers context (a provided code snippet) across multiple turns.
     [Tags]             ai_context
-    Switch To Copado Expert
+    Select AI Agent    Copado Expert
     
     Send Prompt And Wait    Here is my custom Apex class: public class TaxCalculator { public static Decimal getTax(Decimal amount) { return amount * 0.1; } }
     Send Prompt And Wait    Write a complete Apex unit test for that exact class.
@@ -44,7 +44,7 @@ TC002 - Test Multi-Turn Conversation Context Retention
 TC003 - Test Response Formatting For Code Requests
     [Documentation]    Ensures the AI returns code by validating language-specific syntax presence.
     [Tags]             ai_formatting
-    Switch To Copado Expert
+    Select AI Agent    Copado Expert
     Send Prompt And Wait    Write a Salesforce Apex trigger on the Account object that sets the Rating field to 'Hot' before insert if the AnnualRevenue is greater than 100000.
     ${response}=            Get Last AI Response
     Validate Code Snippet Present    ${response}    trigger
@@ -98,15 +98,3 @@ Get Last AI Response
     [Documentation]    Extracts the text from the most recent AI response bubble.
     ${text}=           GetText    ${LAST_AI_MESSAGE}
     RETURN             ${text}
-
-Switch To Copado Expert
-    [Documentation]    Forces the agent dropdown open and selects the Copado Expert.
-    ${is_test_agent}=    IsText    Test Agent    timeout=3s
-    
-    IF  ${is_test_agent}
-        ClickText    Test Agent
-        Sleep        1s    
-        ClickText    Copado Expert
-        Sleep        1s    
-        VerifyText   Copado Expert    timeout=5s
-    END
