@@ -31,18 +31,21 @@ TC001 - Test Basic Dialogue And Relevance
 TC002 - Test Multi-Turn Conversation Context Retention
     [Documentation]    Verifies the AI agent remembers context (a provided code snippet) across multiple turns.
     [Tags]             ai_context
+    Switch To Copado Expert
+    
     Send Prompt And Wait    Here is my custom Apex class: public class TaxCalculator { public static Decimal getTax(Decimal amount) { return amount * 0.1; } }
     Send Prompt And Wait    Write a complete Apex unit test for that exact class.
     ${response}=            Get Last AI Response
     Should Contain          ${response}    TaxCalculator    ignore_case=True
-    Validate Code Snippet Present    ${response}    apex
+    Validate Code Snippet Present    ${response}    class
 
 TC003 - Test Response Formatting For Code Requests
     [Documentation]    Ensures the AI returns code by validating language-specific syntax presence.
     [Tags]             ai_formatting
+    Switch To Copado Expert
     Send Prompt And Wait    Write a Salesforce Apex trigger on the Account object that sets the Rating field to 'Hot' before insert if the AnnualRevenue is greater than 100000.
     ${response}=            Get Last AI Response
-    Validate Code Snippet Present    ${response}    apex
+    Validate Code Snippet Present    ${response}    trigger
 
 TC004 - Test Edge Case And Invalid Input Handling
     [Documentation]    Sends garbage special characters and verifies graceful handling without system crashes.
@@ -110,11 +113,6 @@ Create Clean Chat Session
     [Documentation]    Opens a fresh chat and ensures the general DevOps expert is selected.
     ClickText          Create new chat    timeout=10s
     Sleep              2s
-    ${is_expert}=      Run Keyword And Return Status    VerifyText    Copado Expert    timeout=2s
-    IF  '${is_expert}' == 'False'
-        ClickText      Copado Test Agent
-        ClickText      Copado Expert
-    END
 Send Prompt And Wait
     [Arguments]        ${message}
     [Documentation]    Types a message, clicks send, and waits reliably for the AI to finish generating.
@@ -128,3 +126,12 @@ Get Last AI Response
     [Documentation]    Extracts the text from the most recent AI response bubble.
     ${text}=           GetText    ${LAST_AI_MESSAGE}
     RETURN             ${text}
+Switch To Copado Expert
+    [Documentation]    Checks if the Test Agent is active and switches to the Copado Expert.
+    ${is_test_agent}=  IsText    Copado Test Agent    timeout=2s
+    
+    IF  ${is_test_agent}
+        ClickText      Copado Test Agent
+        ClickText      Copado Expert
+        Sleep          1s    # Quick pause to let the UI update the agent context
+    END
