@@ -34,6 +34,7 @@ Verify Workspace Listing And Persistence
 Delete Workspace And Cleanup
     [Documentation]    Verifies workspace deletion functionality and ensures test data is properly cleaned up.
     [Tags]             testgen    workspace_delete
+    ClickText          ${WORKSPACE_NAME}
     ClickText          Workspace Details
     
     ClickElement       xpath=//*[contains(text(), 'Edit Workspace')]/ancestor-or-self::button/following-sibling::button
