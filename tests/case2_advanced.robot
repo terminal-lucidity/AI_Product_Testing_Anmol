@@ -6,7 +6,6 @@ Library                 DateTime
 Library                 Collections
 Resource                ../resources/common_keywords.robot
 Library                 ../resources/custom_keywords.py
-# UPDATED: Suite Setup now ensures the workspace exists before running tests
 Suite Setup             Run Keywords    Setup Browser And Login    AND    Ensure Test Workspace Exists    ${WORKSPACE_NAME}
 Test Setup              Create Clean Chat Session
 Suite Teardown          Close All Browsers
