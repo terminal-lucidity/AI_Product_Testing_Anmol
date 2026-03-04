@@ -43,18 +43,17 @@ Create Clean Chat Session
     ClickText          Create new chat    timeout=10s
     Sleep              2s
 
-*** Keywords ***
 Select AI Agent
-    [Documentation]    Selects the AI Agent. Handles HTML span fragmentation and non-breaking spaces.
+    [Documentation]    Selects the AI Agent. Handles HTML span fragmentation and Robot Framework syntax quirks.
     [Arguments]        ${agent_name}
     ${first_word}=    Fetch From Left    ${agent_name}    ${SPACE}
     ${dropdown_button}=    Set Variable    //button[@ngbdropdowntoggle][.//div[contains(@class, 'avatar-container')]]
-    ${is_agent_selected}=    IsElement    ${dropdown_button}[.//span[contains(text(), '${first_word}')]]    timeout=3s
+    ${is_agent_selected}=    IsElement    ${dropdown_button}//span[contains(text(), '${first_word}')]    timeout=3s
     
     IF    not ${is_agent_selected}
         ClickElement    ${dropdown_button}
         Sleep           1s    
-        ClickElement    //div[@ngbdropdownitem][.//span[contains(text(), '${first_word}')]]
+        ClickElement    //div[@ngbdropdownitem]//span[contains(text(), '${first_word}')]
         Sleep           1s    
-        VerifyElement   ${dropdown_button}[.//span[contains(text(), '${first_word}')]]    timeout=5s  
+        VerifyElement   ${dropdown_button}//span[contains(text(), '${first_word}')]    timeout=5s  
     END
