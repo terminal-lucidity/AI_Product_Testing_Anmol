@@ -6,7 +6,8 @@ Library                 DateTime
 Library                 Collections
 Resource                ../resources/common_keywords.robot
 Library                 ../resources/custom_keywords.py
-Suite Setup             Setup Browser And Login
+# UPDATED: Suite Setup now ensures the workspace exists before running tests
+Suite Setup             Run Keywords    Setup Browser And Login    AND    Ensure Test Workspace Exists    ${WORKSPACE_NAME}
 Test Setup              Create Clean Chat Session
 Suite Teardown          Close All Browsers
 
@@ -59,7 +60,6 @@ TC005 - Test AI Performance With Complex Data-Driven Prompts
     [Documentation]    Uses a FOR loop and complex architectural scenarios to stress-test response times and generation limits.
     [Tags]             ai_performance    data_driven
     
-    # Advanced, multi-layered architectural prompts
     @{PROMPTS}=             Create List    
     ...    Design a Salesforce CI/CD Git branching strategy for an enterprise with 3 parallel development streams and a strict hotfix routing requirement.
     ...    Compare the security and performance implications of using 'With Sharing' versus 'Without Sharing' in a Batch Apex class processing PII data.
@@ -71,6 +71,7 @@ TC005 - Test AI Performance With Complex Data-Driven Prompts
         ${end_time}=        Get Current Date    result_format=epoch
         Calculate And Validate Performance    ${start_time}    ${end_time}    300
     END
+
 TC006 - Test Complex Troubleshooting Analysis
     [Documentation]    Feeds the AI a complex system error with context constraints and validates multi-part reasoning.
     [Tags]             ai_reasoning    complex_prompt
@@ -81,11 +82,9 @@ TC006 - Test Complex Troubleshooting Analysis
     @{expected_reasoning}=  Create List    bulkification    loop    map    limit
     Validate Ai Relevance   ${response}    ${expected_reasoning}
     Validate Code Snippet Present    ${response}    apex
+
 *** Keywords ***
-Create Clean Chat Session
-    [Documentation]    Opens a fresh chat and ensures the general DevOps expert is selected.
-    ClickText          Create new chat    timeout=10s
-    Sleep              2s
+
 Send Prompt And Wait
     [Arguments]        ${message}
     [Documentation]    Types a message, clicks send, and waits reliably for the AI to finish generating.
@@ -99,6 +98,7 @@ Get Last AI Response
     [Documentation]    Extracts the text from the most recent AI response bubble.
     ${text}=           GetText    ${LAST_AI_MESSAGE}
     RETURN             ${text}
+
 Switch To Copado Expert
     [Documentation]    Forces the agent dropdown open and selects the Copado Expert.
     ${is_test_agent}=    IsText    Test Agent    timeout=3s
