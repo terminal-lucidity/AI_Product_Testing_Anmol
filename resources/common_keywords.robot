@@ -57,3 +57,11 @@ Select AI Agent
         Sleep           1s    
         VerifyElement   ${dropdown_button}//span[contains(text(), '${first_word}')]    timeout=5s  
     END
+Send Prompt To AI
+    [Documentation]    Clicks the chat box, types the prompt, and hits send.
+    [Arguments]        ${prompt_text}
+    ClickElement       //*[@id='ai-prompt-input']
+    Sleep              0.5s
+    TypeText           locator=//*[@id='ai-prompt-input']    input_text=${prompt_text}
+    ClickElement       //*[@id='ai-prompt-send']
+    Sleep              2s
