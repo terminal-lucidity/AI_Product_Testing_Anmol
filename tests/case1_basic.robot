@@ -4,6 +4,7 @@ Library                 QImage
 Library                 OperatingSystem
 Library                 String
 Library                 BuiltIn
+Resource                ../resources/common_keywords.robot  
 Suite Setup             Setup Browser And Login
 Suite Teardown          Close All Browsers
 
@@ -45,21 +46,3 @@ Delete Workspace And Cleanup
     
     GoTo               ${BASE_URL}
     VerifyNoText       ${WORKSPACE_NAME}    timeout=10s
-
-*** Keywords ***
-Setup Browser And Login
-    [Documentation]    Opens the browser, navigates to the app, and handles the Okta/Google login flow.
-    Open Browser       about:blank    chrome    --guest
-    GoTo               ${BASE_URL}
-    VerifyText         Log in to Copado
-    ClickText          Continue with Google
-    VerifyText         Sign in
-    TypeText           Email or phone    ${C_EMAIL}
-    ClickText          Next
-    VerifyText         Connecting to
-    TypeText           Username          ${C_EMAIL}
-    TypeSecret         Password          ${C_PASSWORD}
-    ClickText          Sign In
-    VerifyText         Okta Verify
-    ClickText          Send Push         sleep=60s
-    VerifyText         Welcome           timeout=60s
