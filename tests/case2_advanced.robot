@@ -4,6 +4,7 @@ Library                 String
 Library                 BuiltIn
 Library                 DateTime
 Library                 Collections
+Resource                ../resources/common_keywords.robot
 Library                 ../resources/custom_keywords.py
 Suite Setup             Setup Browser And Login
 Test Setup              Create Clean Chat Session
@@ -65,50 +66,22 @@ TC005 - Test AI Performance With Complex Data-Driven Prompts
     ...    Write a secure Salesforce Lightning Web Component (LWC) that queries Account data using an imperative Apex call, including proper error handling and wire decorators.
     
     FOR    ${prompt}    IN    @{PROMPTS}
-        ${start_time}=      Get Current Date    result_format=epoch
-        
-        Send Prompt And Wait    ${prompt}
-        
+        ${start_time}=      Get Current Date    result_format=epoch    
+        Send Prompt And Wait    ${prompt}      
         ${end_time}=        Get Current Date    result_format=epoch
-        
-        # We might need a slightly higher SLA (e.g., 35 seconds) because architectural generation takes heavy compute power
         Calculate And Validate Performance    ${start_time}    ${end_time}    300
     END
 TC006 - Test Complex Troubleshooting Analysis
     [Documentation]    Feeds the AI a complex system error with context constraints and validates multi-part reasoning.
     [Tags]             ai_reasoning    complex_prompt
-    
-    # A complex, multi-layered prompt mimicking a real senior developer scenario
     ${complex_prompt}=      Set Variable    Analyze this Salesforce deployment error: "System.LimitException: Too many SOQL queries: 101" occurring in an Account trigger during a bulk data load. Explain the exact root cause, identify the violated best practice, and provide a bulkified Apex code solution using a Map.
     
     Send Prompt And Wait    ${complex_prompt}
     ${response}=            Get Last AI Response
-    
-    # 1. Validate Semantic Reasoning: Did it figure out *why* it broke?
     @{expected_reasoning}=  Create List    bulkification    loop    map    limit
     Validate Ai Relevance   ${response}    ${expected_reasoning}
-    
-    # 2. Validate Code Execution: Did it actually write the fix?
     Validate Code Snippet Present    ${response}    apex
 *** Keywords ***
-Setup Browser And Login
-    [Documentation]    Logs in and navigates to the workspace (runs once per suite).
-    Open Browser       about:blank    chrome    --guest
-    GoTo               ${BASE_URL}
-    VerifyText         Log in to Copado
-    ClickText          Continue with Google
-    VerifyText         Sign in
-    TypeText           Email or phone    ${C_EMAIL}
-    ClickText          Next
-    VerifyText         Connecting to
-    TypeText           Username          ${C_EMAIL}
-    TypeSecret         Password          ${C_PASSWORD}
-    ClickText          Sign In
-    VerifyText         Okta Verify
-    ClickText          Send Push         sleep=60s
-    VerifyText         Welcome           timeout=60s
-    ClickText          ${WORKSPACE_NAME}
-
 Create Clean Chat Session
     [Documentation]    Opens a fresh chat and ensures the general DevOps expert is selected.
     ClickText          Create new chat    timeout=10s
