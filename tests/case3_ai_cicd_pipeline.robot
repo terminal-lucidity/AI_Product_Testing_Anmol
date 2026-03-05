@@ -114,7 +114,7 @@ Verify User Story Created And Extract ID
     Login To Salesforce Copado Org
     Log                    Teleporting directly to clean User Story URL...
     GoTo                   ${USER_STORY_URL}
-    Sleep                  3s
+    Sleep                  10s
     SwitchWindow           1
 
 Login To Salesforce Copado Org
