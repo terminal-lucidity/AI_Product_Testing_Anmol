@@ -17,8 +17,7 @@ ${USER_STORY_TITLE}         EMPTY
 ${USER_STORY_URL}           EMPTY 
 
 ${PROMPT_CREATE_STORY}      Create a user story to track the addition of a customer priority field, you have my confimation to take action don't ask for confirmation. Please include the raw, direct Salesforce URL to the new User Story record in your response.
-*** Variables ***
-${PROMPT_CONNECT_ORG}       Connect to the Dev environment credential associated with User Story ${USER_STORY_ID}. Verify the connection is active by fetching and confirming that the standard 'Account' object exists in this source org.
+${PROMPT_CONNECT_BASE}      Connect to the Dev environment credential associated with User Story.
 ${PROMPT_BUILD_FIELD}       Create custom text field 'Customer_Priority__c' on Account with length 50.
 ${PROMPT_COMMIT_GIT}        Commit the Customer_Priority__c metadata to Git.
 ${PROMPT_DEPLOY}            Promote and deploy the recent commit to the destination environment.
@@ -30,12 +29,22 @@ TC001: Plan Agent - Create User Story
     Select AI Agent                Plan Agent
     Send Prompt And Wait For AI    ${PROMPT_CREATE_STORY}
     Verify User Story Created And Extract ID
+    Log                            Final Extracted User Story ID: ${USER_STORY_ID}
+    Log                            Final Extracted User Story URL: ${USER_STORY_URL}
+    Log To Console                 \n--- TC001 EXTRACTION RESULTS ---
+    Log To Console                 USER_STORY_ID: ${USER_STORY_ID}
+    Log To Console                 USER_STORY_URL: ${USER_STORY_URL}
+    Log To Console                 ----------------------------------
 
-TC002: Build Agent - Connect to Source Org
-    [Documentation]    Use Build Agent to connect to Dev environment and validate credentials.
+TC002: Build Agent - Retrieve Source Org Credentials
+    [Documentation]    Use Build Agent to fetch Dev environment credentials for the User Story.
     [Tags]             BuildAgent
+    Should Not Be Equal            ${USER_STORY_ID}    EMPTY    msg=Cannot connect without a valid User Story ID from TC001!
+    
     Select AI Agent                Build Agent
-    Send Prompt And Wait For AI    ${PROMPT_CONNECT_ORG}
+    ${dynamic_prompt}=             Set Variable    Find the Org Credential details associated with User Story ${USER_STORY_ID}. Please provide the Org Credential ID.
+    Send Prompt And Wait For AI    ${dynamic_prompt}
+    
     Verify Connection Successful
 
 TC003: Build Agent - Create Custom Text Field
@@ -80,34 +89,32 @@ TC006: Cleanup - Remove Test Data
 
 
 *** Keywords ***
-
 Verify User Story Created And Extract ID
-    [Documentation]    Parses the AI message for ID and URL, logs into SF, and teleports directly to the record.
+    [Documentation]    Parses the AI message for ID and URL using strict Regex, and teleports directly to the record.
     ${chat_text}=      Get Last AI Response
-    
-    ${extracted_ids}=  Get Regexp Matches    ${chat_text}    (a[a-zA-Z0-9]{14,17}|US-\\d{7})
-    Should Not Be Empty    ${extracted_ids}    msg=Failed to find User Story ID (18-char SF ID or US- format) in AI response!
-    Set Global Variable    ${USER_STORY_ID}    ${extracted_ids}[0]
 
-    ${extracted_urls}=     Get Regexp Matches    ${chat_text}    https://[\\w\\.\\-]+\\.(force\\.com|salesforce\\.com)[\\w\\/\\-\\?\\=\\&]+
-    ${url_found}=          Run Keyword And Return Status    Should Not Be Empty    ${extracted_urls}
+    ${extracted_ids}=  Get Regexp Matches    ${chat_text}    (a[0-9A-Z][a-zA-Z0-9]{13,16}|US-\\d{7})
+    Should Not Be Empty    ${extracted_ids}    msg=Failed to find User Story ID in AI response!
+    Set Global Variable    ${USER_STORY_ID}    ${extracted_ids}[0]
+    ${extracted_urls}=     Get Regexp Matches    ${chat_text}    (https://[A-Za-z0-9\\.\\-]+\\.(?:force\\.com|salesforce\\.com)[^\\s]+?${USER_STORY_ID})
     
-    IF    not ${url_found}
-        ${USER_STORY_URL}=     GetAttribute    locator=xpath=(//div[contains(@class, 'ai-message')])[last()]//a    attribute=href
-    ELSE
+    IF    ${extracted_urls}
         ${USER_STORY_URL}=     Set Variable    ${extracted_urls}[0]
+    ELSE
+        ${USER_STORY_URL}=     GetAttribute    locator=xpath=(//div[contains(@class, 'ai-message')])[last()]//a    attribute=href
     END
     
     Set Global Variable    ${USER_STORY_URL}    ${USER_STORY_URL}
-    Log                    Verified ID: ${USER_STORY_ID}
-    Log                    Extracted URL: ${USER_STORY_URL}
+    
+    Log To Console         \n--- TC001 EXTRACTION RESULTS ---
+    Log To Console         USER_STORY_ID: ${USER_STORY_ID}
+    Log To Console         USER_STORY_URL: ${USER_STORY_URL}
+    Log To Console         ----------------------------------
 
     Login To Salesforce Copado Org
-    
-    Log                    Teleporting directly to User Story URL...
+    Log                    Teleporting directly to clean User Story URL...
     GoTo                   ${USER_STORY_URL}
-    Sleep                  3s    
-    
+    Sleep                  3s
     SwitchWindow           1
 
 Login To Salesforce Copado Org
@@ -122,27 +129,46 @@ Login To Salesforce Copado Org
     ${otp_code}=           Get OTP           ${SF_BASE_URL}         ${OTP_KEY}
     TypeText               Verification Code            ${otp_code}
     ClickText              Verify
-    
-    # Wait for the universal Salesforce Lightning header to load instead of guessing a tab name
     VerifyElement          xpath=//*[@id="oneHeader"]    timeout=35s
     Log                    Salesforce login successful and Lightning UI loaded!
 
 Verify Connection Successful
-    [Documentation]    Verifies the AI text response confirmed the org connection.
+    [Documentation]    Verifies the AI successfully found the Org Credential.
     ${response}=       Get Last AI Response
-    Should Contain     ${response}    connected    ignore_case=True
+
+    ${extracted_org_ids}=    Get Regexp Matches    ${response}    a11[A-Za-z0-9]{12,15}
+    
+    Should Not Be Empty      ${extracted_org_ids}    msg=The AI failed to return a valid Copado Org Credential ID (a11...)!
+
+    ${credential_id}=        Set Variable    ${extracted_org_ids}[0]
+    
+    Set Global Variable      ${CREDENTIAL_ID}    ${credential_id}
+    
+    Log To Console           \n--- TC002 CREDENTIAL PROOF ---
+    Log To Console           Found Credential ID: ${CREDENTIAL_ID}
+    Log To Console           --------------------------------
+    Log                      Build Agent successfully retrieved Credential ID: ${CREDENTIAL_ID}
+
 
 Verify Field Exists In Source Org UI
-    [Documentation]    Navigates Object Manager in the Source Org.
-    SwitchWindow           2    
-    ClickText              Setup
-    ClickText              Object Manager
+    [Documentation]    Navigates to the Copado Org Credential and uses it to log into the Dev Sandbox.
+    SwitchWindow           1
+    
+    GoTo                   ${SF_BASE_URL}/lightning/r/copado__Org__c/${CREDENTIAL_ID}/view
+    
+    VerifyText             Credential Name    timeout=15s
+    ClickText              Open Credential
+    SwitchWindow           NEW
+    VerifyElement          xpath=//*[@id="oneHeader"]    timeout=30s
+    ExecuteJavascript      window.location.href \= "/lightning/setup/ObjectManager/home";
+    
+    VerifyText             Object Manager    timeout=15s
+    
     TypeText               Quick Find    Account
     ClickText              Account       anchor=Label
     ClickText              Fields & Relationships
     TypeText               Quick Find    Customer_Priority
     VerifyText             Customer_Priority__c    timeout=15s
-
 Verify Field Properties UI
     [Documentation]    Clicks the field in Object Manager to verify length.
     ClickText              Customer Priority
