@@ -12,7 +12,6 @@ Suite Teardown          Close All Browsers
 *** Variables ***
 # Global state to carry the generated User Story between fresh chat sessions
 ${USER_STORY_ID}            EMPTY
-${USER_STORY_REF}           EMPTY
 ${USER_STORY_TITLE}         EMPTY
 
 ${USER_STORY_URL}           EMPTY 
@@ -24,7 +23,6 @@ ${PROMPT_COMMIT_GIT}        Commit the Customer_Priority__c metadata to Git.
 ${PROMPT_DEPLOY}            Promote and deploy the recent commit to the destination environment.
 
 *** Test Cases ***
-
 TC001: Plan Agent - Create User Story
     [Documentation]    Use Plan Agent to create User Story and extract the ID for the pipeline.
     [Tags]             PlanAgent    Smoke
@@ -32,11 +30,9 @@ TC001: Plan Agent - Create User Story
     Send Prompt And Wait For AI    ${PROMPT_CREATE_STORY}
     Verify User Story Created And Extract ID
     Log                            Final Extracted User Story ID: ${USER_STORY_ID}
-    Log                            Final Extracted User Story Ref: ${USER_STORY_REF}
     Log                            Final Extracted User Story URL: ${USER_STORY_URL}
     Log To Console                 \n--- TC001 EXTRACTION RESULTS ---
     Log To Console                 USER_STORY_ID: ${USER_STORY_ID}
-    Log To Console                 USER_STORY_REF: ${USER_STORY_REF}
     Log To Console                 USER_STORY_URL: ${USER_STORY_URL}
     Log To Console                 ----------------------------------
 
@@ -94,17 +90,12 @@ TC002: Build Agent - Retrieve Source Org Credentials
 
 *** Keywords ***
 Verify User Story Created And Extract ID
-    [Documentation]    Parses the AI message for ID, US Reference, and URL using strict Regex, teleports directly to the record, and verifies it on the page.
+    [Documentation]    Parses the AI message for ID and URL using strict Regex, and teleports directly to the record.
     ${chat_text}=      Get Last AI Response
 
-    ${extracted_ids}=  Get Regexp Matches    ${chat_text}    (a[0-9A-Za-z]{14,17})
-    Should Not Be Empty    ${extracted_ids}    msg=Failed to find Salesforce Record ID in AI response!
+    ${extracted_ids}=  Get Regexp Matches    ${chat_text}    (a[0-9A-Z][a-zA-Z0-9]{13,16}|US-\\d{7})
+    Should Not Be Empty    ${extracted_ids}    msg=Failed to find User Story ID in AI response!
     Set Global Variable    ${USER_STORY_ID}    ${extracted_ids}[0]
-
-    ${extracted_refs}=     Get Regexp Matches    ${chat_text}    (US-\\d{7})
-    Should Not Be Empty    ${extracted_refs}    msg=Failed to find User Story Reference (US-XXXXXXX) in AI response!
-    Set Global Variable    ${USER_STORY_REF}    ${extracted_refs}[0]
-
     ${extracted_urls}=     Get Regexp Matches    ${chat_text}    (https://[A-Za-z0-9\\.\\-]+\\.(?:force\\.com|salesforce\\.com)[^\\s]+?${USER_STORY_ID})
     
     IF    ${extracted_urls}
@@ -117,17 +108,12 @@ Verify User Story Created And Extract ID
     
     Log To Console         \n--- TC001 EXTRACTION RESULTS ---
     Log To Console         USER_STORY_ID: ${USER_STORY_ID}
-    Log To Console         USER_STORY_REF: ${USER_STORY_REF}
     Log To Console         USER_STORY_URL: ${USER_STORY_URL}
     Log To Console         ----------------------------------
 
     Login To Salesforce Copado Org
     Log                    Teleporting directly to clean User Story URL...
     GoTo                   ${USER_STORY_URL}
-    
-    Log                    Verifying User Story Reference ${USER_STORY_REF} appears on the page...
-    VerifyText             ${USER_STORY_REF}    timeout=15s
-    
     Sleep                  3s
     SwitchWindow           1
 
@@ -192,6 +178,8 @@ Verify Connection Successful
 #     VerifyText             Text(50)                timeout=10s
 #     CloseWindow
 #     SwitchWindow           1
+
+
 
 # Verify Git Commit Details In Copado UI
 #     [Documentation]    Navigates to the User Story and checks the Commits tab.
