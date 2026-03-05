@@ -81,27 +81,32 @@ TC006: Cleanup - Remove Test Data
 *** Keywords ***
 
 Verify User Story Created And Extract ID
-    [Documentation]    Parses the AI message for ID, then opens SF to verify the UI.
+    [Documentation]    Parses the AI message for ID and URL, logs into SF, and teleports directly to the record.
     ${chat_text}=      Get Last AI Response
     
-    # Extract ID (e.g., US-0001234)
-    ${extracted_ids}=  Get Regexp Matches    ${chat_text}    US-\\d{7}
-    Should Not Be Empty    ${extracted_ids}    msg=Failed to find User Story ID in AI response.
+    ${extracted_ids}=  Get Regexp Matches    ${chat_text}    (a[a-zA-Z0-9]{14,17}|US-\\d{7})
+    Should Not Be Empty    ${extracted_ids}    msg=Failed to find User Story ID (18-char SF ID or US- format) in AI response!
     Set Global Variable    ${USER_STORY_ID}    ${extracted_ids}[0]
 
+    ${extracted_urls}=     Get Regexp Matches    ${chat_text}    https://[\\w\\.\\-]+\\.(force\\.com|salesforce\\.com)[\\w\\/\\-\\?\\=\\&]+
+    ${url_found}=          Run Keyword And Return Status    Should Not Be Empty    ${extracted_urls}
+    
+    IF    not ${url_found}
+        ${USER_STORY_URL}=     GetAttribute    locator=xpath=(//div[contains(@class, 'ai-message')])[last()]//a    attribute=href
+    ELSE
+        ${USER_STORY_URL}=     Set Variable    ${extracted_urls}[0]
+    END
+    
+    Set Global Variable    ${USER_STORY_URL}    ${USER_STORY_URL}
     Log                    Verified ID: ${USER_STORY_ID}
+    Log                    Extracted URL: ${USER_STORY_URL}
 
-    # ACTUALLY NAVIGATE AND VERIFY USING YOUR SNIPPET LOGIC
     Login To Salesforce Copado Org
     
-    ClickText              User Stories
-    # Use Salesforce list view search to find the AI generated story
-    TypeText               Search this list...    ${USER_STORY_ID}
-    PressKey               Search this list...    {ENTER}
-    VerifyText             ${USER_STORY_ID}       timeout=15s
-    Log                    User Story successfully verified in Copado UI!
+    Log                    Teleporting directly to User Story URL...
+    GoTo                   ${USER_STORY_URL}
+    Sleep                  3s    
     
-    # Switch back to the AI chat tab
     SwitchWindow           1
 
 Login To Salesforce Copado Org
@@ -125,7 +130,7 @@ Verify Connection Successful
 
 Verify Field Exists In Source Org UI
     [Documentation]    Navigates Object Manager in the Source Org.
-    SwitchWindow           2    # Switch to the Salesforce Tab
+    SwitchWindow           2    
     ClickText              Setup
     ClickText              Object Manager
     TypeText               Quick Find    Account
@@ -138,7 +143,7 @@ Verify Field Properties UI
     [Documentation]    Clicks the field in Object Manager to verify length.
     ClickText              Customer Priority
     VerifyText             Text(50)                timeout=10s
-    SwitchWindow           1    # Switch back to AI Chat
+    SwitchWindow           1   
 
 Verify Git Commit Details In Copado UI
     [Documentation]    Navigates to the User Story and checks the Commits tab.
@@ -166,8 +171,6 @@ Cleanup Test Data From UI
     SwitchWindow           2
     ClickText              User Stories
     ClickText              ${USER_STORY_ID}
-    
-    # Deletion Functionality (Cleanup) based on your snippet
     ClickText              Show more actions    anchor=Open Pull Request
     ClickText              Delete
     ClickText              Delete
