@@ -156,14 +156,13 @@ Verify Field Exists In Source Org UI
     GoTo                   ${SF_BASE_URL}/lightning/r/copado__Org__c/${CREDENTIAL_ID}/view
     
     VerifyText             Credential Name    timeout=15s
-    
-    # Get the credential URL and open in new window
-    ${credential_url}=     GetAttribute       //a[contains(text(),'Open Credential')]    href
-    ExecuteJavascript      window.open('${credential_url}', '_blank');
+    ClickText              Open Credential
     
     SwitchWindow           NEW
     VerifyElement          xpath=//*[@id\="oneHeader"]    timeout=30s
-    ExecuteJavascript      window.location.href = "/lightning/setup/ObjectManager/home";
+    ${scratch_domain}=     ExecuteJavascript    return window.location.origin
+    
+    GoTo                   ${scratch_domain}/lightning/setup/ObjectManager/home
     
     VerifyText             Object Manager    timeout=15s
     
@@ -179,7 +178,6 @@ Verify Field Properties UI
     VerifyText             Text(50)                timeout=10s
     CloseWindow
     SwitchWindow           1
-
 
 
 
