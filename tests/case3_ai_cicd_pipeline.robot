@@ -17,7 +17,8 @@ ${USER_STORY_TITLE}         EMPTY
 ${USER_STORY_URL}           EMPTY 
 
 ${PROMPT_CREATE_STORY}      Create a user story to track the addition of a customer priority field, you have my confimation to take action don't ask for confirmation. Please include the raw, direct Salesforce URL to the new User Story record in your response.
-${PROMPT_CONNECT_ORG}       Connect to the Dev environment.
+*** Variables ***
+${PROMPT_CONNECT_ORG}       Connect to the Dev environment credential associated with User Story ${USER_STORY_ID}. Verify the connection is active by fetching and confirming that the standard 'Account' object exists in this source org.
 ${PROMPT_BUILD_FIELD}       Create custom text field 'Customer_Priority__c' on Account with length 50.
 ${PROMPT_COMMIT_GIT}        Commit the Customer_Priority__c metadata to Git.
 ${PROMPT_DEPLOY}            Promote and deploy the recent commit to the destination environment.
