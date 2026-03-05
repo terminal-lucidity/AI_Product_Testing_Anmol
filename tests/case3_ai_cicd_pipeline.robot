@@ -16,7 +16,7 @@ ${USER_STORY_TITLE}         EMPTY
 
 ${USER_STORY_URL}           EMPTY 
 
-${PROMPT_CREATE_STORY}      Create a user story to track the addition of a customer priority field. Please include the raw, direct Salesforce URL to the new User Story record in your response.
+${PROMPT_CREATE_STORY}      Create a user story to track the addition of a customer priority field, you have my confimation to take action don't ask for confirmation. Please include the raw, direct Salesforce URL to the new User Story record in your response.
 ${PROMPT_CONNECT_ORG}       Connect to the Dev environment.
 ${PROMPT_BUILD_FIELD}       Create custom text field 'Customer_Priority__c' on Account with length 50.
 ${PROMPT_COMMIT_GIT}        Commit the Customer_Priority__c metadata to Git.
@@ -108,7 +108,7 @@ Login To Salesforce Copado Org
     [Documentation]    Opens a new window and uses your snippet's MFA logic to log in.
     OpenWindow
     SwitchWindow           NEW
-    GoTo                   ${BASE_URL}
+    GoTo                   ${SF_BASE_URL}
     TypeText               Username          ${S_EMAIL}
     TypeSecret             Password          ${S_PASSWORD}
     ClickText              Log In
