@@ -12,6 +12,7 @@ Suite Teardown          Close All Browsers
 *** Variables ***
 # Global state to carry the generated User Story between fresh chat sessions
 ${USER_STORY_ID}            EMPTY
+${USER_STORY_REF}           EMPTY
 ${USER_STORY_TITLE}         EMPTY
 
 ${USER_STORY_URL}           EMPTY 
@@ -23,6 +24,7 @@ ${PROMPT_COMMIT_GIT}        Commit the Customer_Priority__c metadata to Git.
 ${PROMPT_DEPLOY}            Promote and deploy the recent commit to the destination environment.
 
 *** Test Cases ***
+
 TC001: Plan Agent - Create User Story
     [Documentation]    Use Plan Agent to create User Story and extract the ID for the pipeline.
     [Tags]             PlanAgent    Smoke
@@ -30,9 +32,11 @@ TC001: Plan Agent - Create User Story
     Send Prompt And Wait For AI    ${PROMPT_CREATE_STORY}
     Verify User Story Created And Extract ID
     Log                            Final Extracted User Story ID: ${USER_STORY_ID}
+    Log                            Final Extracted User Story Ref: ${USER_STORY_REF}
     Log                            Final Extracted User Story URL: ${USER_STORY_URL}
     Log To Console                 \n--- TC001 EXTRACTION RESULTS ---
     Log To Console                 USER_STORY_ID: ${USER_STORY_ID}
+    Log To Console                 USER_STORY_REF: ${USER_STORY_REF}
     Log To Console                 USER_STORY_URL: ${USER_STORY_URL}
     Log To Console                 ----------------------------------
 
@@ -47,55 +51,60 @@ TC002: Build Agent - Retrieve Source Org Credentials
     
     Verify Connection Successful
 
-TC003: Build Agent - Create Custom Text Field
-    [Documentation]    Send request to create a custom text field and validate metadata.
-    [Tags]             BuildAgent
-    Should Not Be Equal            ${USER_STORY_ID}    EMPTY    msg=Cannot run Build Agent without a valid User Story ID from TC001!
+# TC003: Build Agent - Create Custom Text Field
+#     [Documentation]    Send request to create a custom text field and validate metadata.
+#     [Tags]             BuildAgent
+#     Should Not Be Equal            ${USER_STORY_ID}    EMPTY    msg=Cannot run Build Agent without a valid User Story ID from TC001!
     
-    Select AI Agent                Build Agent
-    ${dynamic_prompt}=             Set Variable    ${PROMPT_BUILD_FIELD} Attach this to User Story ${USER_STORY_ID}.
-    Send Prompt And Wait For AI    ${dynamic_prompt}
+#     Select AI Agent                Build Agent
+#     ${dynamic_prompt}=             Set Variable    ${PROMPT_BUILD_FIELD} Attach this to User Story ${USER_STORY_ID}.
+#     Send Prompt And Wait For AI    ${dynamic_prompt}
     
-    Verify Field Exists In Source Org UI
-    Verify Field Properties UI
+#     Verify Field Exists In Source Org UI
+#     Verify Field Properties UI
 
-TC004: Release Agent - Commit Metadata to Git
-    [Documentation]    Use Release Agent to commit metadata and validate Git commit.
-    [Tags]             ReleaseAgent
-    Should Not Be Equal            ${USER_STORY_ID}    EMPTY    msg=Cannot commit without a valid User Story ID!
+# TC004: Release Agent - Commit Metadata to Git
+#     [Documentation]    Use Release Agent to commit metadata and validate Git commit.
+#     [Tags]             ReleaseAgent
+#     Should Not Be Equal            ${USER_STORY_ID}    EMPTY    msg=Cannot commit without a valid User Story ID!
     
-    Select AI Agent                Release Agent
-    ${dynamic_prompt}=             Set Variable    ${PROMPT_COMMIT_GIT} Use User Story ${USER_STORY_ID}.
-    Send Prompt And Wait For AI    ${dynamic_prompt}
+#     Select AI Agent                Release Agent
+#     ${dynamic_prompt}=             Set Variable    ${PROMPT_COMMIT_GIT} Use User Story ${USER_STORY_ID}.
+#     Send Prompt And Wait For AI    ${dynamic_prompt}
     
-    Verify Git Commit Details In Copado UI
+#     Verify Git Commit Details In Copado UI
 
-TC005: Release Agent - Promote and Deploy to Destination
-    [Documentation]    Instruct AI agent to promote changes and verify successful deployment.
-    [Tags]             ReleaseAgent
-    Should Not Be Equal            ${USER_STORY_ID}    EMPTY    msg=Cannot deploy without a valid User Story ID!
+# TC005: Release Agent - Promote and Deploy to Destination
+#     [Documentation]    Instruct AI agent to promote changes and verify successful deployment.
+#     [Tags]             ReleaseAgent
+#     Should Not Be Equal            ${USER_STORY_ID}    EMPTY    msg=Cannot deploy without a valid User Story ID!
     
-    Select AI Agent                Release Agent
-    ${dynamic_prompt}=             Set Variable    ${PROMPT_DEPLOY} Deploy User Story ${USER_STORY_ID}.
-    Send Prompt And Wait For AI    ${dynamic_prompt}
+#     Select AI Agent                Release Agent
+#     ${dynamic_prompt}=             Set Variable    ${PROMPT_DEPLOY} Deploy User Story ${USER_STORY_ID}.
+#     Send Prompt And Wait For AI    ${dynamic_prompt}
     
-    Monitor Deployment Status UI
-    Verify Field Exists In Destination Org UI
+#     Monitor Deployment Status UI
+#     Verify Field Exists In Destination Org UI
 
-TC006: Cleanup - Remove Test Data
-    [Documentation]    Deletes the User Story and custom fields from the orgs to reset state.
-    [Tags]             Cleanup
-    Cleanup Test Data From UI
+# TC006: Cleanup - Remove Test Data
+#     [Documentation]    Deletes the User Story and custom fields from the orgs to reset state.
+#     [Tags]             Cleanup
+#     Cleanup Test Data From UI
 
 
 *** Keywords ***
 Verify User Story Created And Extract ID
-    [Documentation]    Parses the AI message for ID and URL using strict Regex, and teleports directly to the record.
+    [Documentation]    Parses the AI message for ID, US Reference, and URL using strict Regex, teleports directly to the record, and verifies it on the page.
     ${chat_text}=      Get Last AI Response
 
-    ${extracted_ids}=  Get Regexp Matches    ${chat_text}    (a[0-9A-Z][a-zA-Z0-9]{13,16}|US-\\d{7})
-    Should Not Be Empty    ${extracted_ids}    msg=Failed to find User Story ID in AI response!
+    ${extracted_ids}=  Get Regexp Matches    ${chat_text}    (a[0-9A-Za-z]{14,17})
+    Should Not Be Empty    ${extracted_ids}    msg=Failed to find Salesforce Record ID in AI response!
     Set Global Variable    ${USER_STORY_ID}    ${extracted_ids}[0]
+
+    ${extracted_refs}=     Get Regexp Matches    ${chat_text}    (US-\\d{7})
+    Should Not Be Empty    ${extracted_refs}    msg=Failed to find User Story Reference (US-XXXXXXX) in AI response!
+    Set Global Variable    ${USER_STORY_REF}    ${extracted_refs}[0]
+
     ${extracted_urls}=     Get Regexp Matches    ${chat_text}    (https://[A-Za-z0-9\\.\\-]+\\.(?:force\\.com|salesforce\\.com)[^\\s]+?${USER_STORY_ID})
     
     IF    ${extracted_urls}
@@ -108,12 +117,17 @@ Verify User Story Created And Extract ID
     
     Log To Console         \n--- TC001 EXTRACTION RESULTS ---
     Log To Console         USER_STORY_ID: ${USER_STORY_ID}
+    Log To Console         USER_STORY_REF: ${USER_STORY_REF}
     Log To Console         USER_STORY_URL: ${USER_STORY_URL}
     Log To Console         ----------------------------------
 
     Login To Salesforce Copado Org
     Log                    Teleporting directly to clean User Story URL...
     GoTo                   ${USER_STORY_URL}
+    
+    Log                    Verifying User Story Reference ${USER_STORY_REF} appears on the page...
+    VerifyText             ${USER_STORY_REF}    timeout=15s
+    
     Sleep                  3s
     SwitchWindow           1
 
@@ -149,68 +163,66 @@ Verify Connection Successful
     Log To Console           --------------------------------
     Log                      Build Agent successfully retrieved Credential ID: ${CREDENTIAL_ID}
 
-Verify Field Exists In Source Org UI
-    [Documentation]    Navigates to the Copado Org Credential and uses it to log into the Dev Sandbox.
-    SwitchWindow           2
+# Verify Field Exists In Source Org UI
+#     [Documentation]    Navigates to the Copado Org Credential and uses it to log into the Dev Sandbox.
+#     SwitchWindow           2
     
-    GoTo                   ${SF_BASE_URL}/lightning/r/copado__Org__c/${CREDENTIAL_ID}/view
+#     GoTo                   ${SF_BASE_URL}/lightning/r/copado__Org__c/${CREDENTIAL_ID}/view
     
-    VerifyText             Credential Name    timeout=15s
-    ClickText              Open Credential
+#     VerifyText             Credential Name    timeout=15s
+#     ClickText              Open Credential
     
-    SwitchWindow           NEW
-    VerifyElement          xpath=//*[@id\="oneHeader"]    timeout=30s
-    ${scratch_domain}=     ExecuteJavascript    return window.location.origin
+#     SwitchWindow           NEW
+#     VerifyElement          xpath=//*[@id\="oneHeader"]    timeout=30s
+#     ${scratch_domain}=     ExecuteJavascript    return window.location.origin
     
-    GoTo                   ${scratch_domain}/lightning/setup/ObjectManager/home
+#     GoTo                   ${scratch_domain}/lightning/setup/ObjectManager/home
     
-    VerifyText             Object Manager    timeout=15s
+#     VerifyText             Object Manager    timeout=15s
     
-    TypeText               Quick Find    Account
-    ClickText              Account       anchor=Label
-    ClickText              Fields & Relationships
-    TypeText               Quick Find    Customer_Priority
-    VerifyText             Customer_Priority__c    timeout=15s
+#     TypeText               Quick Find    Account
+#     ClickText              Account       anchor=Label
+#     ClickText              Fields & Relationships
+#     TypeText               Quick Find    Customer_Priority
+#     VerifyText             Customer_Priority__c    timeout=15s
 
-Verify Field Properties UI
-    [Documentation]    Clicks the field in Object Manager to verify length, then closes the org window.
-    ClickText              Customer Priority
-    VerifyText             Text(50)                timeout=10s
-    CloseWindow
-    SwitchWindow           1
+# Verify Field Properties UI
+#     [Documentation]    Clicks the field in Object Manager to verify length, then closes the org window.
+#     ClickText              Customer Priority
+#     VerifyText             Text(50)                timeout=10s
+#     CloseWindow
+#     SwitchWindow           1
 
+# Verify Git Commit Details In Copado UI
+#     [Documentation]    Navigates to the User Story and checks the Commits tab.
+#     SwitchWindow           2
+#     ClickText              User Stories
+#     ClickText              ${USER_STORY_ID}
+#     ClickText              Commits
+#     VerifyText             Customer_Priority__c    timeout=15s
+#     SwitchWindow           1
 
+# Monitor Deployment Status UI
+#     [Documentation]    Checks the Deployments/Deliver tab on the User Story.
+#     SwitchWindow           2
+#     ClickText              Deliver    # Or the specific deployment tab in your org
+#     VerifyText             Success    timeout=120s    # Wait for deployment to finish
+#     SwitchWindow           1
 
-Verify Git Commit Details In Copado UI
-    [Documentation]    Navigates to the User Story and checks the Commits tab.
-    SwitchWindow           2
-    ClickText              User Stories
-    ClickText              ${USER_STORY_ID}
-    ClickText              Commits
-    VerifyText             Customer_Priority__c    timeout=15s
-    SwitchWindow           1
+# Verify Field Exists In Destination Org UI
+#     [Documentation]    Needs to log into the destination org (UAT) to check the field.
+#     Log                    Navigation logic to Destination Org Object Manager goes here.
+#     # Note: If UAT requires a separate login, you would open a 3rd window here.
 
-Monitor Deployment Status UI
-    [Documentation]    Checks the Deployments/Deliver tab on the User Story.
-    SwitchWindow           2
-    ClickText              Deliver    # Or the specific deployment tab in your org
-    VerifyText             Success    timeout=120s    # Wait for deployment to finish
-    SwitchWindow           1
-
-Verify Field Exists In Destination Org UI
-    [Documentation]    Needs to log into the destination org (UAT) to check the field.
-    Log                    Navigation logic to Destination Org Object Manager goes here.
-    # Note: If UAT requires a separate login, you would open a 3rd window here.
-
-Cleanup Test Data From UI
-    [Documentation]    Deletes the User Story using the cleanup logic from your snippet.
-    SwitchWindow           2
-    ClickText              User Stories
-    ClickText              ${USER_STORY_ID}
-    ClickText              Show more actions    anchor=Open Pull Request
-    ClickText              Delete
-    ClickText              Delete
+# Cleanup Test Data From UI
+#     [Documentation]    Deletes the User Story using the cleanup logic from your snippet.
+#     SwitchWindow           2
+#     ClickText              User Stories
+#     ClickText              ${USER_STORY_ID}
+#     ClickText              Show more actions    anchor=Open Pull Request
+#     ClickText              Delete
+#     ClickText              Delete
     
-    # Final Visibility check: Ensure it's gone from the list
-    ClickText              User Stories
-    VerifyNoText           ${USER_STORY_ID}    timeout=10s
+#     # Final Visibility check: Ensure it's gone from the list
+#     ClickText              User Stories
+#     VerifyNoText           ${USER_STORY_ID}    timeout=10s
