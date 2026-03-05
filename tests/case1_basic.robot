@@ -28,7 +28,10 @@ TC001: Create A New Workspace
 TC002: Verify Workspace Listing And Persistence
     [Documentation]    Verifies that the newly created workspace persists and appears in the workspace list.
     [Tags]             testgen    workspace_listing
-    GoTo               ${BASE_URL}
+    ${CURRENT_URL}=    GetUrl
+    IF    '${CURRENT_URL}' != '${BASE_URL}'
+        GoTo    ${BASE_URL}
+    END
     VerifyText         Welcome
     VerifyText         ${WORKSPACE_NAME}
 
