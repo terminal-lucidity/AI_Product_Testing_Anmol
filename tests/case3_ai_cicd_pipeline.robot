@@ -149,18 +149,21 @@ Verify Connection Successful
     Log To Console           --------------------------------
     Log                      Build Agent successfully retrieved Credential ID: ${CREDENTIAL_ID}
 
-
 Verify Field Exists In Source Org UI
     [Documentation]    Navigates to the Copado Org Credential and uses it to log into the Dev Sandbox.
-    SwitchWindow           1
+    SwitchWindow           2
     
     GoTo                   ${SF_BASE_URL}/lightning/r/copado__Org__c/${CREDENTIAL_ID}/view
     
     VerifyText             Credential Name    timeout=15s
-    ClickText              Open Credential
+    
+    # Get the credential URL and open in new window
+    ${credential_url}=     GetAttribute       //a[contains(text(),'Open Credential')]    href
+    ExecuteJavascript      window.open('${credential_url}', '_blank');
+    
     SwitchWindow           NEW
-    VerifyElement          xpath=//*[@id="oneHeader"]    timeout=30s
-    ExecuteJavascript      window.location.href \= "/lightning/setup/ObjectManager/home";
+    VerifyElement          xpath=//*[@id\="oneHeader"]    timeout=30s
+    ExecuteJavascript      window.location.href = "/lightning/setup/ObjectManager/home";
     
     VerifyText             Object Manager    timeout=15s
     
@@ -169,11 +172,16 @@ Verify Field Exists In Source Org UI
     ClickText              Fields & Relationships
     TypeText               Quick Find    Customer_Priority
     VerifyText             Customer_Priority__c    timeout=15s
+
 Verify Field Properties UI
-    [Documentation]    Clicks the field in Object Manager to verify length.
+    [Documentation]    Clicks the field in Object Manager to verify length, then closes the org window.
     ClickText              Customer Priority
     VerifyText             Text(50)                timeout=10s
-    SwitchWindow           1   
+    CloseWindow
+    SwitchWindow           1
+
+
+
 
 Verify Git Commit Details In Copado UI
     [Documentation]    Navigates to the User Story and checks the Commits tab.
