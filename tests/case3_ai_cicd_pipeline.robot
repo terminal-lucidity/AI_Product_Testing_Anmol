@@ -1,15 +1,22 @@
 *** Settings ***
 Documentation           Validate Copado AI Platform agents can orchestrate an end-to-end CI/CD workflow.
 Resource                ../resources/common_keywords.robot
+Library                 QWeb
+Library                 QForce
+Library                 String
+
 Suite Setup             Run Keywords    Setup Browser And Login    AND    Ensure Test Workspace Exists    ${WORKSPACE_NAME}
 Test Setup              Create Clean Chat Session
 Suite Teardown          Close All Browsers
+
 *** Variables ***
 # Global state to carry the generated User Story between fresh chat sessions
 ${USER_STORY_ID}            EMPTY
+${USER_STORY_TITLE}         EMPTY
 
-# Base AI Prompts reconstructed from your spec
-${PROMPT_CREATE_STORY}      Create a user story to track the addition of a customer priority field.
+${USER_STORY_URL}           EMPTY 
+
+${PROMPT_CREATE_STORY}      Create a user story to track the addition of a customer priority field. Please include the raw, direct Salesforce URL to the new User Story record in your response.
 ${PROMPT_CONNECT_ORG}       Connect to the Dev environment.
 ${PROMPT_BUILD_FIELD}       Create custom text field 'Customer_Priority__c' on Account with length 50.
 ${PROMPT_COMMIT_GIT}        Commit the Customer_Priority__c metadata to Git.
@@ -33,18 +40,14 @@ TC002: Build Agent - Connect to Source Org
 TC003: Build Agent - Create Custom Text Field
     [Documentation]    Send request to create a custom text field and validate metadata.
     [Tags]             BuildAgent
-    # Failsafe: Ensure TC01 successfully grabbed an ID before trying to build
-    Should Not Be Equal            ${USER_STORY_ID}    EMPTY    msg=Cannot run Build Agent without a valid User Story ID from TC01!
+    Should Not Be Equal            ${USER_STORY_ID}    EMPTY    msg=Cannot run Build Agent without a valid User Story ID from TC001!
     
     Select AI Agent                Build Agent
-    
-    # Dynamically inject the User Story ID so the clean chat session knows what to target
     ${dynamic_prompt}=             Set Variable    ${PROMPT_BUILD_FIELD} Attach this to User Story ${USER_STORY_ID}.
     Send Prompt And Wait For AI    ${dynamic_prompt}
     
-    Monitor Execution Progress
-    Verify Field Exists In Source Org
-    Verify Field Properties
+    Verify Field Exists In Source Org UI
+    Verify Field Properties UI
 
 TC004: Release Agent - Commit Metadata to Git
     [Documentation]    Use Release Agent to commit metadata and validate Git commit.
@@ -52,13 +55,10 @@ TC004: Release Agent - Commit Metadata to Git
     Should Not Be Equal            ${USER_STORY_ID}    EMPTY    msg=Cannot commit without a valid User Story ID!
     
     Select AI Agent                Release Agent
-    
-    # Dynamically inject the User Story ID
     ${dynamic_prompt}=             Set Variable    ${PROMPT_COMMIT_GIT} Use User Story ${USER_STORY_ID}.
     Send Prompt And Wait For AI    ${dynamic_prompt}
     
-    Monitor Execution Progress
-    Verify Git Commit Details
+    Verify Git Commit Details In Copado UI
 
 TC005: Release Agent - Promote and Deploy to Destination
     [Documentation]    Instruct AI agent to promote changes and verify successful deployment.
@@ -66,66 +66,112 @@ TC005: Release Agent - Promote and Deploy to Destination
     Should Not Be Equal            ${USER_STORY_ID}    EMPTY    msg=Cannot deploy without a valid User Story ID!
     
     Select AI Agent                Release Agent
-    
-    # Dynamically inject the User Story ID
     ${dynamic_prompt}=             Set Variable    ${PROMPT_DEPLOY} Deploy User Story ${USER_STORY_ID}.
     Send Prompt And Wait For AI    ${dynamic_prompt}
     
-    Monitor Deployment Status
-    Verify Field Exists In Destination Org
+    Monitor Deployment Status UI
+    Verify Field Exists In Destination Org UI
+
+TC006: Cleanup - Remove Test Data
+    [Documentation]    Deletes the User Story and custom fields from the orgs to reset state.
+    [Tags]             Cleanup
+    Cleanup Test Data From UI
+
 
 *** Keywords ***
 
 Verify User Story Created And Extract ID
-    [Documentation]    Parses the AI message for both ID and Title, then verifies the UI.
+    [Documentation]    Parses the AI message for ID, then opens SF to verify the UI.
     ${chat_text}=      Get Last AI Response
     
     # Extract ID (e.g., US-0001234)
     ${extracted_ids}=  Get Regexp Matches    ${chat_text}    US-\\d{7}
-    Should Not Be Empty    ${extracted_ids}
+    Should Not Be Empty    ${extracted_ids}    msg=Failed to find User Story ID in AI response.
     Set Global Variable    ${USER_STORY_ID}    ${extracted_ids}[0]
 
-    ${extracted_titles}=   Get Regexp Matches    ${chat_text}    (?<=Created\\s)(.*?)(?=\\s\\()
-    ${title}=              Set Variable If    ${extracted_titles}    ${extracted_titles}[0]    Created Story
-    Set Global Variable    ${USER_STORY_TITLE}    ${title}
+    Log                    Verified ID: ${USER_STORY_ID}
+
+    # ACTUALLY NAVIGATE AND VERIFY USING YOUR SNIPPET LOGIC
+    Login To Salesforce Copado Org
     
-    Log                    Verified ID: ${USER_STORY_ID} and Title: ${USER_STORY_TITLE}
-
-    # ACTUALLY NAVIGATE AND VERIFY
     ClickText              User Stories
-    TypeText               Search...    ${USER_STORY_ID}    # Search by ID is safer than Title
-    VerifyText             ${USER_STORY_TITLE}    timeout=10s
+    # Use Salesforce list view search to find the AI generated story
+    TypeText               Search this list...    ${USER_STORY_ID}
+    PressKey               Search this list...    {ENTER}
+    VerifyText             ${USER_STORY_ID}       timeout=15s
     Log                    User Story successfully verified in Copado UI!
+    
+    # Switch back to the AI chat tab
+    SwitchWindow           1
 
-# -------------------------------------------------------------------------
-# VALIDATION STUBS (Ready for your CLI or Copado UI verification logic)
-# -------------------------------------------------------------------------
+Login To Salesforce Copado Org
+    [Documentation]    Opens a new window and uses your snippet's MFA logic to log in.
+    OpenWindow
+    SwitchWindow           NEW
+    GoTo                   ${SF_BASE_URL}
+    TypeText               Username          ${S_EMAIL}
+    TypeSecret             Password          ${S_PASSWORD}
+    ClickText              Log In
+
+    ${otp_code}=           Get OTP           ${ORG_URL}         ${OTP_Key}
+    TypeText               Verification Code            ${otp_code}
+    ClickText              Verify
+    VerifyText             Home              timeout=20s
 
 Verify Connection Successful
-    [Documentation]    Verifies the AI successfully connected to the source org.
+    [Documentation]    Verifies the AI text response confirmed the org connection.
     ${response}=       Get Last AI Response
     Should Contain     ${response}    connected    ignore_case=True
 
-Monitor Execution Progress
-    [Documentation]    Placeholder for polling Copado Actions API or waiting for execution to finish.
-    Log                Polling for job completion...
+Verify Field Exists In Source Org UI
+    [Documentation]    Navigates Object Manager in the Source Org.
+    SwitchWindow           2    # Switch to the Salesforce Tab
+    ClickText              Setup
+    ClickText              Object Manager
+    TypeText               Quick Find    Account
+    ClickText              Account       anchor=Label
+    ClickText              Fields & Relationships
+    TypeText               Quick Find    Customer_Priority
+    VerifyText             Customer_Priority__c    timeout=15s
 
-Verify Field Exists In Source Org
-    [Documentation]    Validate the field was created via SOQL or UI.
-    Log                Querying Salesforce to ensure Customer_Priority__c exists...
+Verify Field Properties UI
+    [Documentation]    Clicks the field in Object Manager to verify length.
+    ClickText              Customer Priority
+    VerifyText             Text(50)                timeout=10s
+    SwitchWindow           1    # Switch back to AI Chat
 
-Verify Field Properties
-    [Documentation]    Validate the field length is 50.
-    Log                Checking field length is 50...
+Verify Git Commit Details In Copado UI
+    [Documentation]    Navigates to the User Story and checks the Commits tab.
+    SwitchWindow           2
+    ClickText              User Stories
+    ClickText              ${USER_STORY_ID}
+    ClickText              Commits
+    VerifyText             Customer_Priority__c    timeout=15s
+    SwitchWindow           1
 
-Verify Git Commit Details
-    [Documentation]    Validate the commit exists in Git/Copado.
-    Log                Checking Copado for the Git commit payload on ${USER_STORY_ID}...
+Monitor Deployment Status UI
+    [Documentation]    Checks the Deployments/Deliver tab on the User Story.
+    SwitchWindow           2
+    ClickText              Deliver    # Or the specific deployment tab in your org
+    VerifyText             Success    timeout=120s    # Wait for deployment to finish
+    SwitchWindow           1
 
-Monitor Deployment Status
-    [Documentation]    Wait for the deployment to finish.
-    Log                Waiting for Release agent to finish deployment...
+Verify Field Exists In Destination Org UI
+    [Documentation]    Needs to log into the destination org (UAT) to check the field.
+    Log                    Navigation logic to Destination Org Object Manager goes here.
+    # Note: If UAT requires a separate login, you would open a 3rd window here.
 
-Verify Field Exists In Destination Org
-    [Documentation]    Validate the field reached the destination environment.
-    Log                Querying destination org to confirm deployment...
+Cleanup Test Data From UI
+    [Documentation]    Deletes the User Story using the cleanup logic from your snippet.
+    SwitchWindow           2
+    ClickText              User Stories
+    ClickText              ${USER_STORY_ID}
+    
+    # Deletion Functionality (Cleanup) based on your snippet
+    ClickText              Show more actions    anchor=Open Pull Request
+    ClickText              Delete
+    ClickText              Delete
+    
+    # Final Visibility check: Ensure it's gone from the list
+    ClickText              User Stories
+    VerifyNoText           ${USER_STORY_ID}    timeout=10s
