@@ -90,31 +90,61 @@ TC002: Build Agent - Retrieve Source Org Credentials
 
 *** Keywords ***
 Verify User Story Created And Extract ID
-    [Documentation]    Parses the AI message for ID and URL using strict Regex, and teleports directly to the record.
+    [Documentation]    Parses the AI message robustly, teleports to the record, and uses strict DOM XPaths to verify the Title field.
     ${chat_text}=      Get Last AI Response
 
+    # 1. Strict ID & URL Extraction
     ${extracted_ids}=  Get Regexp Matches    ${chat_text}    (a[0-9A-Z][a-zA-Z0-9]{13,16}|US-\\d{7})
     Should Not Be Empty    ${extracted_ids}    msg=Failed to find User Story ID in AI response!
     Set Global Variable    ${USER_STORY_ID}    ${extracted_ids}[0]
-    ${extracted_urls}=     Get Regexp Matches    ${chat_text}    (https://[A-Za-z0-9\\.\\-]+\\.(?:force\\.com|salesforce\\.com)[^\\s]+?${USER_STORY_ID})
     
+    ${extracted_urls}=     Get Regexp Matches    ${chat_text}    (https://[A-Za-z0-9\\.\\-]+\\.(?:force\\.com|salesforce\\.com)[^\\s]+?${USER_STORY_ID})
     IF    ${extracted_urls}
         ${USER_STORY_URL}=     Set Variable    ${extracted_urls}[0]
     ELSE
         ${USER_STORY_URL}=     GetAttribute    locator=xpath=(//div[contains(@class, 'ai-message')])[last()]//a    attribute=href
     END
-    
     Set Global Variable    ${USER_STORY_URL}    ${USER_STORY_URL}
+
+    # 2. ROBUST TITLE EXTRACTION
+    # (?i) makes it case-insensitive.
+    # (?:user\s*story\s*)?title:\s* handles both "Title:" and "User Story Title:"
+    # (?= ... ) is the lookahead that forces it to stop at the next known label, even if smashed without spaces.
+    ${regex_pattern}=      Set Variable          (?i)(?:user\\s*story\\s*)?title:\\s*(.*?)(?=(?:user\\s*story\\s*id|direct\\s*salesforce\\s*url|status|project|as\\s*a|summary):|\\n|$)
+    ${extracted_titles}=   Get Regexp Matches    ${chat_text}    ${regex_pattern}    1
     
+    Should Not Be Empty    ${extracted_titles}   msg=Failed to extract the User Story Title using the robust regex!
+    ${USER_STORY_TITLE}=   Strip String          ${extracted_titles}[0]
+    Set Global Variable    ${USER_STORY_TITLE}   ${USER_STORY_TITLE}
+
     Log To Console         \n--- TC001 EXTRACTION RESULTS ---
     Log To Console         USER_STORY_ID: ${USER_STORY_ID}
     Log To Console         USER_STORY_URL: ${USER_STORY_URL}
+    Log To Console         USER_STORY_TITLE: ${USER_STORY_TITLE}
     Log To Console         ----------------------------------
 
+    # 3. Login and Teleport
     Login To Salesforce Copado Org
     Log                    Teleporting directly to clean User Story URL...
     GoTo                   ${USER_STORY_URL}
-    Sleep                  10s
+    
+
+    ${title_xpath}=        Set Variable    xpath=//div[@data-target-selection-name="sfdc:RecordField.copado__User_Story__c.copado__User_Story_Title__c"]//*[@data-output-element-id="output-field"]
+    
+    VerifyElement          ${title_xpath}    timeout=20s
+    
+    ${actual_sf_title}=    GetText           ${title_xpath}
+    
+    Log To Console         \n--- SALESFORCE RECORD TRUTH ---
+    Log To Console         AI Claimed Title: ${USER_STORY_TITLE}
+    Log To Console         Actual SF Title:  ${actual_sf_title}
+    Log To Console         ---------------------------------
+    
+
+    Should Contain         ${actual_sf_title}    Customer Priority    ignore_case=True
+    Log                    Successfully verified the exact DOM element contains the correct User Story context!
+    
+    Sleep                  2s
     SwitchWindow           1
 
 Login To Salesforce Copado Org
