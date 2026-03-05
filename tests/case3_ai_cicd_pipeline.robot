@@ -118,10 +118,13 @@ Login To Salesforce Copado Org
     TypeSecret             Password          ${S_PASSWORD}
     ClickText              Log In
 
-    ${otp_code}=           Get OTP           ${S_EMAIL}        ${OTP_Key}
+    ${otp_code}=           Get OTP           ${S_EMAIL}         ${OTP_KEY}
     TypeText               Verification Code            ${otp_code}
     ClickText              Verify
-    VerifyText             Home              timeout=20s
+    
+    # Wait for the universal Salesforce Lightning header to load instead of guessing a tab name
+    VerifyElement          xpath=//*[@id="oneHeader"]    timeout=35s
+    Log                    Salesforce login successful and Lightning UI loaded!
 
 Verify Connection Successful
     [Documentation]    Verifies the AI text response confirmed the org connection.
