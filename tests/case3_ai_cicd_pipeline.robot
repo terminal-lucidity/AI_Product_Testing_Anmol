@@ -108,7 +108,7 @@ Login To Salesforce Copado Org
     [Documentation]    Opens a new window and uses your snippet's MFA logic to log in.
     OpenWindow
     SwitchWindow           NEW
-    GoTo                   ${SF_BASE_URL}
+    GoTo                   ${BASE_URL}
     TypeText               Username          ${S_EMAIL}
     TypeSecret             Password          ${S_PASSWORD}
     ClickText              Log In
