@@ -113,7 +113,7 @@ Login To Salesforce Copado Org
     TypeSecret             Password          ${S_PASSWORD}
     ClickText              Log In
 
-    ${otp_code}=           Get OTP           ${ORG_URL}         ${OTP_Key}
+    ${otp_code}=           Get OTP           ${S_EMAIL}        ${OTP_Key}
     TypeText               Verification Code            ${otp_code}
     ClickText              Verify
     VerifyText             Home              timeout=20s
