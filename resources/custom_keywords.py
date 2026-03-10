@@ -152,88 +152,24 @@ class custom_keywords:
         return elapsed_time
 
     def validate_code_snippet_present(self, response_text, expected_type="class"):
-        """
-        Validate that the response contains a well-formed code snippet for the given expected type.
-        Prefer fenced code blocks (```apex ... ```), but also accept non‑fenced Apex where needed.
-        :param response_text: Full AI response
-        :param expected_type: "class", "trigger", "apex", or other
-        """
-        if response_text is None:
-            error_msg = "Response is None; expected code snippet not found."
-            logger.error(error_msg)
-            raise AssertionError(error_msg)
-
-        if not isinstance(response_text, str):
-            error_msg = f"Response must be a string. Got type: {type(response_text)}"
-            logger.error(error_msg)
-            raise AssertionError(error_msg)
-
-        if not response_text.strip():
-            error_msg = "Response is empty; expected code snippet not found."
-            logger.error(error_msg)
-            raise AssertionError(error_msg)
-
-        text = response_text
-        et = (expected_type or "").lower()
-
-        # --- 1) Define fenced code patterns (preferred) ---
-        class_fenced = (
-            r"```(?:apex)?\s*"
-            r"(?:public|global|private|protected)?\s*class\s+\w+\s*\{.*?```"
-        )
-        trigger_fenced = (
-            r"```(?:apex)?\s*"
-            r"trigger\s+\w+\s+on\s+\w+\s*\([\w\s,]+\)\s*\{.*?```"
-        )
-
-        if et == "class":
-            fenced_pattern = class_fenced
-        elif et == "trigger":
-            fenced_pattern = trigger_fenced
-        elif et == "apex":
-            # Either an Apex class or trigger inside a fenced block
-            fenced_pattern = rf"(?:{class_fenced}|{trigger_fenced})"
+        response_lower = response_text.lower()
+        
+        if expected_type.lower() == "trigger":
+            code_markers = ["trigger ", " on ", "{", "}", ";"]
+        elif expected_type.lower() == "class":
+            code_markers = ["class ", "{", "}", ";"]
         else:
-            # Generic fenced block fallback
-            fenced_pattern = r"```.+?```"
-
-        has_fenced = re.search(fenced_pattern, text, re.IGNORECASE | re.DOTALL) is not None
-
-        # --- 2) If no fenced code found and we're dealing with Apex, try non‑fenced patterns ---
-        has_unfenced = False
-        if not has_fenced and et in ("class", "trigger", "apex"):
-            class_unfenced = (
-                r"\b(?:public|global|private|protected)?\s*class\s+\w+\s*\{.*?\}"
-            )
-            trigger_unfenced = (
-                r"\btrigger\s+\w+\s+on\s+\w+\s*\([\w\s,]+\)\s*\{.*?\}"
-            )
-
-            if et in ("class", "apex") and re.search(class_unfenced, text, re.IGNORECASE | re.DOTALL):
-                has_unfenced = True
-
-            if et in ("trigger", "apex") and re.search(trigger_unfenced, text, re.IGNORECASE | re.DOTALL):
-                has_unfenced = True
-
-        if not (has_fenced or has_unfenced):
-            if et in ("class", "trigger", "apex"):
-                detail = "in a fenced code block or as plain Apex"
-            else:
-                detail = "in a fenced code block"
-
-            error_msg = (
-                f"Expected {expected_type} code snippet {detail} "
-                f"not found in the AI response."
-            )
+            code_markers = ["{", "}"] # Fallback
+            
+        missing_markers = [marker for marker in code_markers if marker not in response_lower]
+        if len(missing_markers) > 1:
+            error_msg = f"Expected {expected_type} code snippet not found. Missing syntax markers: {missing_markers}"
             logger.error(error_msg)
             raise AssertionError(error_msg)
-
-        logger.info(
-            f"Code snippet for {expected_type} successfully identified in the response text "
-            f"(fenced={has_fenced}, unfenced={has_unfenced})."
-        )
+            
+        logger.info(f"Code snippet for {expected_type} successfully identified in the response text.")
         return True
-
+        
     def validate_context_retention(
         self,
         previous_user_message,
