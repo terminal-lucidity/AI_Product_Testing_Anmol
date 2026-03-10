@@ -178,11 +178,11 @@ class custom_keywords:
 
         # --- 1) Define fenced code patterns (preferred) ---
         class_fenced = (
-            r"(?s)```(?:apex)?\s*"
+            r"```(?:apex)?\s*"
             r"(?:public|global|private|protected)?\s*class\s+\w+\s*\{.*?```"
         )
         trigger_fenced = (
-            r"(?s)```(?:apex)?\s*"
+            r"```(?:apex)?\s*"
             r"trigger\s+\w+\s+on\s+\w+\s*\([\w\s,]+\)\s*\{.*?```"
         )
 
@@ -192,31 +192,30 @@ class custom_keywords:
             fenced_pattern = trigger_fenced
         elif et == "apex":
             # Either an Apex class or trigger inside a fenced block
-            fenced_pattern = f"{class_fenced}|{trigger_fenced}"
+            fenced_pattern = rf"(?:{class_fenced}|{trigger_fenced})"
         else:
             # Generic fenced block fallback
-            fenced_pattern = r"(?s)```.+?```"
+            fenced_pattern = r"```.+?```"
 
-        has_fenced = re.search(fenced_pattern, text, re.IGNORECASE) is not None
+        has_fenced = re.search(fenced_pattern, text, re.IGNORECASE | re.DOTALL) is not None
 
         # --- 2) If no fenced code found and we're dealing with Apex, try non‑fenced patterns ---
         has_unfenced = False
         if not has_fenced and et in ("class", "trigger", "apex"):
             class_unfenced = (
-                r"(?s)\b(?:public|global|private|protected)?\s*class\s+\w+\s*\{.*?\}"
+                r"\b(?:public|global|private|protected)?\s*class\s+\w+\s*\{.*?\}"
             )
             trigger_unfenced = (
-                r"(?s)\btrigger\s+\w+\s+on\s+\w+\s*\([\w\s,]+\)\s*\{.*?\}"
+                r"\btrigger\s+\w+\s+on\s+\w+\s*\([\w\s,]+\)\s*\{.*?\}"
             )
 
-            if et in ("class", "apex") and re.search(class_unfenced, text, re.IGNORECASE):
+            if et in ("class", "apex") and re.search(class_unfenced, text, re.IGNORECASE | re.DOTALL):
                 has_unfenced = True
 
-            if et in ("trigger", "apex") and re.search(trigger_unfenced, text, re.IGNORECASE):
+            if et in ("trigger", "apex") and re.search(trigger_unfenced, text, re.IGNORECASE | re.DOTALL):
                 has_unfenced = True
 
         if not (has_fenced or has_unfenced):
-            # Tailor error message for Apex vs generic
             if et in ("class", "trigger", "apex"):
                 detail = "in a fenced code block or as plain Apex"
             else:
