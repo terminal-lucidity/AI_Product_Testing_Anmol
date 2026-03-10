@@ -4,8 +4,8 @@ Resource                ../resources/common_keywords.robot
 Library                 QWeb
 Library                 QForce
 Library                 String
-
-Suite Setup             Run Keywords    Setup Browser And Login    AND    Ensure Test Workspace Exists    ${WORKSPACE_NAME}
+Library                 OperatingSystem
+Suite Setup             Run Keywords    Install SF CLI On CRT    AND    Setup Browser And Login    AND    Ensure Test Workspace Exists    ${WORKSPACE_NAME}
 Test Setup              Create Clean Chat Session
 Suite Teardown          Close All Browsers
 
@@ -13,7 +13,7 @@ Suite Teardown          Close All Browsers
 # Global state to carry the generated User Story between fresh chat sessions
 ${USER_STORY_ID}            EMPTY
 ${USER_STORY_TITLE}         EMPTY
-
+${CREDENTIAL_ID}            EMPTY
 ${USER_STORY_URL}           EMPTY 
 
 ${PROMPT_CREATE_STORY}      Create a user story to track the addition of a customer priority field, you have my confimation to take action don't ask for confirmation. Please include the raw, direct Salesforce URL to the new User Story record in your response.
@@ -21,16 +21,22 @@ ${PROMPT_CONNECT_BASE}      Connect to the Dev environment credential associated
 ${PROMPT_BUILD_FIELD}       Create custom text field 'Customer_Priority__c' on Account with length 50.
 ${PROMPT_COMMIT_GIT}        Commit the Customer_Priority__c metadata to Git.
 ${PROMPT_DEPLOY}            Promote and deploy the recent commit to the destination environment.
-
+${SF_TARGET_ORG}            Dev1-SFP
+*** Test Cases ***
 *** Test Cases ***
 TC001: Plan Agent - Create User Story
     [Documentation]    Use Plan Agent to create User Story and extract the ID for the pipeline.
     [Tags]             PlanAgent    Smoke
     Select AI Agent                Plan Agent
     Send Prompt And Wait For AI    ${PROMPT_CREATE_STORY}
-    Verify User Story Created And Extract ID
+    
+    Extract User Story Details
+    
     Log                            Final Extracted User Story ID: ${USER_STORY_ID}
     Log                            Final Extracted User Story URL: ${USER_STORY_URL}
+    
+    Verify User Story              ${USER_STORY_ID}    ${USER_STORY_TITLE}
+    
     Log To Console                 \n--- TC001 EXTRACTION RESULTS ---
     Log To Console                 USER_STORY_ID: ${USER_STORY_ID}
     Log To Console                 USER_STORY_URL: ${USER_STORY_URL}
@@ -45,7 +51,9 @@ TC002: Build Agent - Retrieve Source Org Credentials
     ${dynamic_prompt}=             Set Variable    Find the Org Credential details associated with User Story ${USER_STORY_ID}. Please provide the Org Credential ID.
     Send Prompt And Wait For AI    ${dynamic_prompt}
     
-    Verify Connection Successful
+    Extract Org Credential Details
+    
+    Verify Org Credential          ${CREDENTIAL_ID}
 
 # TC003: Build Agent - Create Custom Text Field
 #     [Documentation]    Send request to create a custom text field and validate metadata.
@@ -89,11 +97,17 @@ TC002: Build Agent - Retrieve Source Org Credentials
 
 
 *** Keywords ***
-Verify User Story Created And Extract ID
-    [Documentation]    Parses the AI message robustly, teleports to the record, and uses strict DOM XPaths to verify the Title field.
+Install SF CLI On CRT
+    [Documentation]    Installs the Salesforce CLI into the local CRT workspace.
+    Log                    Downloading and installing Salesforce CLI on the CRT runner...
+    ${rc}    ${output}=    Run And Return Rc And Output    npm install @salesforce/cli
+    Should Be Equal As Integers    ${rc}    0    msg=Failed to install SF CLI! Output: ${output}
+    Log                    SF CLI installed successfully!
+
+Extract User Story Details
+    [Documentation]    Parses the AI message robustly to extract ID, URL, and Title.
     ${chat_text}=      Get Last AI Response
 
-    # 1. Strict ID & URL Extraction
     ${extracted_ids}=  Get Regexp Matches    ${chat_text}    (a[0-9A-Z][a-zA-Z0-9]{13,16}|US-\\d{7})
     Should Not Be Empty    ${extracted_ids}    msg=Failed to find User Story ID in AI response!
     Set Global Variable    ${USER_STORY_ID}    ${extracted_ids}[0]
@@ -106,78 +120,78 @@ Verify User Story Created And Extract ID
     END
     Set Global Variable    ${USER_STORY_URL}    ${USER_STORY_URL}
 
-    # 2. ROBUST TITLE EXTRACTION
-    # (?i) makes it case-insensitive.
-    # (?:user\s*story\s*)?title:\s* handles both "Title:" and "User Story Title:"
-    # (?= ... ) is the lookahead that forces it to stop at the next known label, even if smashed without spaces.
     ${regex_pattern}=      Set Variable          (?i)(?:user\\s*story\\s*)?title:\\s*(.*?)(?=(?:user\\s*story\\s*id|direct\\s*salesforce\\s*url|status|project|as\\s*a|summary):|\\n|$)
     ${extracted_titles}=   Get Regexp Matches    ${chat_text}    ${regex_pattern}    1
-    
-    Should Not Be Empty    ${extracted_titles}   msg=Failed to extract the User Story Title using the robust regex!
+    Should Not Be Empty    ${extracted_titles}   msg=Failed to extract the User Story Title!
     ${USER_STORY_TITLE}=   Strip String          ${extracted_titles}[0]
     Set Global Variable    ${USER_STORY_TITLE}   ${USER_STORY_TITLE}
 
-    Log To Console         \n--- TC001 EXTRACTION RESULTS ---
-    Log To Console         USER_STORY_ID: ${USER_STORY_ID}
-    Log To Console         USER_STORY_URL: ${USER_STORY_URL}
-    Log To Console         USER_STORY_TITLE: ${USER_STORY_TITLE}
-    Log To Console         ----------------------------------
-
-    # 3. Login and Teleport
-    Login To Salesforce Copado Org
-    Log                    Teleporting directly to clean User Story URL...
-    GoTo                   ${USER_STORY_URL}
-    
-
-    ${title_xpath}=        Set Variable    xpath=//div[@data-target-selection-name="sfdc:RecordField.copado__User_Story__c.copado__User_Story_Title__c"]//*[@data-output-element-id="output-field"]
-    
-    VerifyElement          ${title_xpath}    timeout=20s
-    
-    ${actual_sf_title}=    GetText           ${title_xpath}
-    
-    Log To Console         \n--- SALESFORCE RECORD TRUTH ---
-    Log To Console         AI Claimed Title: ${USER_STORY_TITLE}
-    Log To Console         Actual SF Title:  ${actual_sf_title}
-    Log To Console         ---------------------------------
-    
-
-    Should Contain         ${actual_sf_title}    Customer Priority    ignore_case=True
-    Log                    Successfully verified the exact DOM element contains the correct User Story context!
-    
-    Sleep                  2s
-    SwitchWindow           1
-
-Login To Salesforce Copado Org
-    [Documentation]    Opens a new window and uses your snippet's MFA logic to log in.
-    OpenWindow
-    SwitchWindow           NEW
-    GoTo                   ${SF_BASE_URL}
-    TypeText               Username          ${S_EMAIL}
-    TypeSecret             Password          ${S_PASSWORD}
-    ClickText              Log In
-
-    ${otp_code}=           Get OTP           ${SF_BASE_URL}         ${OTP_KEY}
-    TypeText               Verification Code            ${otp_code}
-    ClickText              Verify
-    VerifyElement          xpath=//*[@id="oneHeader"]    timeout=35s
-    Log                    Salesforce login successful and Lightning UI loaded!
-
-Verify Connection Successful
-    [Documentation]    Verifies the AI successfully found the Org Credential.
+Extract Org Credential Details
+    [Documentation]    Pulls the Copado Org Credential ID from the AI's response.
     ${response}=       Get Last AI Response
-
     ${extracted_org_ids}=    Get Regexp Matches    ${response}    a11[A-Za-z0-9]{12,15}
-    
-    Should Not Be Empty      ${extracted_org_ids}    msg=The AI failed to return a valid Copado Org Credential ID (a11...)!
+    Should Not Be Empty      ${extracted_org_ids}    msg=Failed to return a valid Copado Org Credential ID!
+    Set Global Variable      ${CREDENTIAL_ID}        ${extracted_org_ids}[0]
 
-    ${credential_id}=        Set Variable    ${extracted_org_ids}[0]
+Verify User Story
+    [Arguments]            ${story_id}    ${expected_title}
+    [Documentation]        Queries the User Story via SF CLI and verifies the title matches.
+    ${query}=              Set Variable    SELECT Id, Name, copado__User_Story_Title__c FROM copado__User_Story__c WHERE Id = '${story_id}'
+    # Switched to npx sf to prevent path execution failures
+    ${command}=            Set Variable    npx sf data query --query "${query}" --target-org ${SF_TARGET_ORG} --json
+    ${output}=             Run SF CLI Command    ${command}
+    Should Contain         ${output}    ${expected_title}    ignore_case=True    msg=User Story title not found in CLI output!
+    Log                    Successfully verified User Story data directly via SF CLI!
+
+Verify Org Credential
+    [Arguments]            ${credential_id}
+    [Documentation]        Queries the Copado Org Credential via SF CLI to ensure it exists.
+    ${query}=              Set Variable    SELECT Id, Name FROM copado__Org__c WHERE Id = '${credential_id}'
+    ${command}=            Set Variable    npx sf data query --query "${query}" --target-org ${SF_TARGET_ORG} --json
+    ${output}=             Run SF CLI Command    ${command}
+    Should Contain         ${output}    ${credential_id}    msg=Org Credential ID not found in CLI output!
+    Log                    Successfully verified Org Credential directly via SF CLI!
+
+Run SF CLI Command
+    [Arguments]            ${command}
+    [Documentation]        Executes an SF CLI command. Ensures we are logged in first.
+    SF Login
+    Log                    Executing SF CLI Command: ${command}
+    ${rc}    ${output}=    Run And Return Rc And Output    ${command}
+    Should Be Equal As Integers    ${rc}    0    msg=SF CLI command failed! Output: ${output}
+    RETURN                 ${output}
+
+SF Login
+    [Documentation]        Authenticates the SF CLI robustly using a SOAP API Session ID pipe.
+    # 1. Check if we are already authenticated to avoid unnecessary logins
+    ${check_auth_rc}  ${check_auth_out}=    Run And Return Rc And Output    npx sf org display --target-org ${SF_TARGET_ORG}
+    Return From Keyword If    ${check_auth_rc} == 0
+
+    Log                    Target org not authenticated. Initiating SOAP API Login...
+    ${otp_code}=           Get OTP    ${SF_BASE_URL}    ${OTP_KEY}
+
+    # 2. Build the XML Payload
+    ${xml_payload}=        Set Variable    <?xml version="1.0" encoding="utf-8" ?><env:Envelope xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:env="http://schemas.xmlsoap.org/soap/envelope/"><env:Body><n1:login xmlns:n1="urn:partner.soap.sforce.com"><n1:username>${S_EMAIL}</n1:username><n1:password>${S_PASSWORD}${otp_code}</n1:password></n1:login></env:Body></env:Envelope>
+    Create File            login_payload.xml    ${xml_payload}
+
+    # 3. Execute the cURL request to Salesforce
+    ${curl_cmd}=           Set Variable    curl -s -X POST -H "Content-Type: text/xml" -H "SOAPAction: login" -d @login_payload.xml ${SF_BASE_URL}/services/Soap/u/58.0
+    ${rc}    ${output}=    Run And Return Rc And Output    ${curl_cmd}
+    Remove File            login_payload.xml
     
-    Set Global Variable      ${CREDENTIAL_ID}    ${credential_id}
+    # 4. Safely extract the session ID with error checking
+    ${session_ids}=        Get Regexp Matches    ${output}    <sessionId>(.*?)</sessionId>    1
+    IF    not ${session_ids}
+        Fail    Failed to retrieve Session ID! Salesforce responded with:\n${output}
+    END
+    ${session_id}=         Set Variable    ${session_ids}[0]
     
-    Log To Console           \n--- TC002 CREDENTIAL PROOF ---
-    Log To Console           Found Credential ID: ${CREDENTIAL_ID}
-    Log To Console           --------------------------------
-    Log                      Build Agent successfully retrieved Credential ID: ${CREDENTIAL_ID}
+    # 5. Use 'echo |' instead of '< file.txt' to pipe the token to the CLI safely in the subshell
+    ${login_cmd}=          Set Variable    echo "${session_id}" | npx sf org login access-token --set-default --alias ${SF_TARGET_ORG} --instance-url ${SF_BASE_URL} --no-prompt
+    ${cli_rc}  ${cli_out}=  Run And Return Rc And Output    ${login_cmd}
+    
+    Should Be Equal As Integers    ${cli_rc}    0    msg=SF CLI Token Login failed! Output: ${cli_out}
+    Log                    SF CLI authenticated successfully!
 
 # Verify Field Exists In Source Org UI
 #     [Documentation]    Navigates to the Copado Org Credential and uses it to log into the Dev Sandbox.
