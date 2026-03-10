@@ -154,9 +154,9 @@ class custom_keywords:
     def validate_code_snippet_present(self, response_text, expected_type="class"):
         """
         Validate that the response contains a well-formed code snippet for the given expected type.
-        Prefer fenced code blocks (```apex ... ```).
+        Prefer fenced code blocks (```apex ... ```), but also accept non‑fenced Apex where needed.
         :param response_text: Full AI response
-        :param expected_type: "class", "trigger", or other
+        :param expected_type: "class", "trigger", "apex", or other
         """
         if response_text is None:
             error_msg = "Response is None; expected code snippet not found."
@@ -174,34 +174,65 @@ class custom_keywords:
             raise AssertionError(error_msg)
 
         text = response_text
-
         et = (expected_type or "").lower()
 
+        # --- 1) Define fenced code patterns (preferred) ---
         if et == "trigger":
-            # Apex trigger inside fenced code block
-            pattern = (
-                r"(?s)```(?:apex)?\s*"
-                r"trigger\s+\w+\s+on\s+\w+\s*\([\w\s,]+\)\s*\{.*?```"
-            )
+            fenced_pattern = (
+            r"(?s)```(?:apex)?\s*"
+            r"trigger\s+\w+\s+on\s+\w+\s*\([\w\s,]+\)\s*\{.*?```"
+        )
         elif et == "class":
-            # Apex class inside fenced code block
-            pattern = (
-                r"(?s)```(?:apex)?\s*"
-                r"(public|global|private|protected)?\s*class\s+\w+\s*\{.*?```"
-            )
+            fenced_pattern = (
+            r"(?s)```(?:apex)?\s*"
+            r"(public|global|private|protected)?\s*class\s+\w+\s*\{.*?```"
+        )
+        elif et == "apex":
+            # Any Apex trigger or class inside a fenced block
+            fenced_pattern = (
+            r"(?s)```(?:apex)?\s*"
+            r"(?:(?:public|global|private|protected)?\s*class\s+\w+\s*\{.*?"
+            r"|trigger\s+\w+\s+on\s+\w+\s*\([\w\s,]+\)\s*\{.*?```)"
+        )
         else:
-            # Generic fenced code block as a fallback
-            pattern = r"(?s)```.+?```"
+            # Generic fenced block fallback
+            fenced_pattern = r"(?s)```.+?```"
 
-        if not re.search(pattern, text, re.IGNORECASE):
-            error_msg = (
-                f"Expected {expected_type} code snippet in a fenced code block not found "
-                f"in the AI response."
+        has_fenced = re.search(fenced_pattern, text, re.IGNORECASE) is not None
+
+        # --- 2) If no fenced code found, try non‑fenced patterns for Apex types ---
+        has_unfenced = False
+        if not has_fenced:
+            if et in ("class", "apex"):
+                class_pattern_unfenced = (
+                r"(?s)\b(public|global|private|protected)?\s*class\s+\w+\s*\{.*?\}"
             )
-            logger.error(error_msg)
-            raise AssertionError(error_msg)
+            if re.search(class_pattern_unfenced, text, re.IGNORECASE):
+                has_unfenced = True
 
-        logger.info(f"Code snippet for {expected_type} successfully identified in the response text.")
+            if et in ("trigger", "apex"):
+                trigger_pattern_unfenced = (
+                r"(?s)\btrigger\s+\w+\s+on\s+\w+\s*\([\w\s,]+\)\s*\{.*?\}"
+            )
+            if re.search(trigger_pattern_unfenced, text, re.IGNORECASE):
+                has_unfenced = True or has_unfenced
+
+        # For completely generic / other types, you could also allow any '{...}' block,
+        # but that may be too permissive depending on your strictness needs.
+
+        if not (has_fenced or has_unfenced):
+            error_msg = (
+            f"Expected {expected_type} code snippet "
+            f"{'in a fenced code block or as plain Apex' if et in ('class', 'trigger', 'apex') else 'in a fenced code block'} "
+            f"not found in the AI response."
+        )
+        logger.error(error_msg)
+        raise AssertionError(error_msg)
+
+        logger.info(
+        f"Code snippet for {expected_type} successfully identified in the response text "
+        f"(fenced={has_fenced}, unfenced={has_unfenced})."
+    )
         return True
 
     def validate_context_retention(self, previous_user_message, previous_ai_response,
