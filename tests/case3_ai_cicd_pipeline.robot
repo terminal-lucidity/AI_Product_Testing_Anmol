@@ -15,7 +15,7 @@ ${USER_STORY_ID}            EMPTY
 ${USER_STORY_TITLE}         EMPTY
 ${CREDENTIAL_ID}            EMPTY
 ${USER_STORY_URL}           EMPTY 
-
+         
 ${PROMPT_CREATE_STORY}      Create a user story to track the addition of a customer priority field, you have my confimation to take action don't ask for confirmation. Please include the raw, direct Salesforce URL to the new User Story record in your response.
 ${PROMPT_CONNECT_BASE}      Connect to the Dev environment credential associated with User Story.
 ${PROMPT_BUILD_FIELD}       Create custom text field 'Customer_Priority__c' on Account with length 50.
@@ -162,36 +162,30 @@ Run SF CLI Command
     RETURN                 ${output}
 
 SF Login
-    [Documentation]        Authenticates the SF CLI robustly using a SOAP API Session ID pipe.
+    [Documentation]        Authenticates the SF CLI robustly using an SFDX Auth URL.
+    
     # 1. Check if we are already authenticated to avoid unnecessary logins
     ${check_auth_rc}  ${check_auth_out}=    Run And Return Rc And Output    npx sf org display --target-org ${SF_TARGET_ORG}
     Return From Keyword If    ${check_auth_rc} == 0
 
-    Log                    Target org not authenticated. Initiating SOAP API Login...
-    ${otp_code}=           Get OTP    ${SF_BASE_URL}    ${OTP_KEY}
-
-    # 2. Build the XML Payload
-    ${xml_payload}=        Set Variable    <?xml version="1.0" encoding="utf-8" ?><env:Envelope xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:env="http://schemas.xmlsoap.org/soap/envelope/"><env:Body><n1:login xmlns:n1="urn:partner.soap.sforce.com"><n1:username>${S_EMAIL}</n1:username><n1:password>${S_PASSWORD}${otp_code}</n1:password></n1:login></env:Body></env:Envelope>
-    Create File            login_payload.xml    ${xml_payload}
-
-    # 3. Execute the cURL request to Salesforce
-    ${curl_cmd}=           Set Variable    curl -s -X POST -H "Content-Type: text/xml" -H "SOAPAction: login" -d @login_payload.xml ${SF_BASE_URL}/services/Soap/u/58.0
-    ${rc}    ${output}=    Run And Return Rc And Output    ${curl_cmd}
-    Remove File            login_payload.xml
+    Log                    Target org not authenticated. Initiating SFDX Auth URL Login...
     
-    # 4. Safely extract the session ID with error checking
-    ${session_ids}=        Get Regexp Matches    ${output}    <sessionId>(.*?)</sessionId>    1
-    IF    not ${session_ids}
-        Fail    Failed to retrieve Session ID! Salesforce responded with:\n${output}
-    END
-    ${session_id}=         Set Variable    ${session_ids}[0]
-    
-    # 5. Use 'echo |' instead of '< file.txt' to pipe the token to the CLI safely in the subshell
-    ${login_cmd}=          Set Variable    echo "${session_id}" | npx sf org login access-token --set-default --alias ${SF_TARGET_ORG} --instance-url ${SF_BASE_URL} --no-prompt
+    # Ensure the Auth URL was provided
+    Should Not Be Equal    ${SFDX_AUTH_URL}    EMPTY    msg=SFDX_AUTH_URL is missing! Please provide a valid Auth URL.
+
+    # 2. Write the Auth URL to a temporary file (required by the CLI)
+    Create File            auth_url.txt    ${SFDX_AUTH_URL}
+
+    # 3. Authenticate using the CLI's sfdx-url command
+    ${login_cmd}=          Set Variable    npx sf org login sfdx-url --sfdx-url-file auth_url.txt --set-default --alias ${SF_TARGET_ORG}
     ${cli_rc}  ${cli_out}=  Run And Return Rc And Output    ${login_cmd}
     
-    Should Be Equal As Integers    ${cli_rc}    0    msg=SF CLI Token Login failed! Output: ${cli_out}
-    Log                    SF CLI authenticated successfully!
+    # 4. Clean up the sensitive file immediately so it doesn't linger on the runner
+    Remove File            auth_url.txt
+    
+    # 5. Validate the login was successful
+    Should Be Equal As Integers    ${cli_rc}    0    msg=SF CLI Auth URL Login failed! Output: ${cli_out}
+    Log                    SF CLI authenticated successfully via Auth URL!
 
 # Verify Field Exists In Source Org UI
 #     [Documentation]    Navigates to the Copado Org Credential and uses it to log into the Dev Sandbox.
