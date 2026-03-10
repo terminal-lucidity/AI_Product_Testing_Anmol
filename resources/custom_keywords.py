@@ -5,7 +5,6 @@ from robot.api import logger
 
 class custom_keywords:
 
-
     def validate_ai_relevance(self, response_text, expected_keywords, min_match_ratio=1.0):
         """
         Validate that the AI response contains a sufficient portion of the expected keywords.
@@ -83,19 +82,18 @@ class custom_keywords:
             logger.error(error_msg)
             raise AssertionError(error_msg)
 
-
         default_patterns = [
-            r"System\.[\w]+Exception",              
-            r"java\.lang\.\w+Exception",           
-            r"\bException in thread\b",            
-            r"Traceback \(most recent call last\):", 
-            r"\bat line \d+ of\b",                 
-            r"SQL syntax error",                  
-            r"ORA-\d{5}",                          
-            r"Stack trace:",                       
-            r"NullPointerException",               
-            r"ReferenceError:",                    
-            r"TypeError:",                        
+            r"System\.[\w]+Exception",
+            r"java\.lang\.\w+Exception",
+            r"\bException in thread\b",
+            r"Traceback \(most recent call last\):",
+            r"\bat line \d+ of\b",
+            r"SQL syntax error",
+            r"ORA-\d{5}",
+            r"Stack trace:",
+            r"NullPointerException",
+            r"ReferenceError:",
+            r"TypeError:",
         ]
 
         error_patterns = denied_patterns if denied_patterns is not None else default_patterns
@@ -115,7 +113,6 @@ class custom_keywords:
         logger.info("Edge case validated: No raw system exceptions leaked.")
         return True
 
-
     def calculate_and_validate_performance(self, start_time, end_time, max_seconds):
         """
         Validate that the AI response time stays under an SLA threshold.
@@ -134,7 +131,10 @@ class custom_keywords:
             raise AssertionError(error_msg)
 
         elapsed_time = end - start
-        logger.info(f"AI Response took: {elapsed_time:.3f} seconds (max allowed: {max_allowed:.3f}s).")
+        logger.info(
+            f"AI Response took: {elapsed_time:.3f} seconds "
+            f"(max allowed: {max_allowed:.3f}s)."
+        )
 
         if elapsed_time < 0:
             error_msg = (
@@ -177,67 +177,72 @@ class custom_keywords:
         et = (expected_type or "").lower()
 
         # --- 1) Define fenced code patterns (preferred) ---
-        if et == "trigger":
-            fenced_pattern = (
+        class_fenced = (
+            r"(?s)```(?:apex)?\s*"
+            r"(?:public|global|private|protected)?\s*class\s+\w+\s*\{.*?```"
+        )
+        trigger_fenced = (
             r"(?s)```(?:apex)?\s*"
             r"trigger\s+\w+\s+on\s+\w+\s*\([\w\s,]+\)\s*\{.*?```"
         )
-        elif et == "class":
-            fenced_pattern = (
-            r"(?s)```(?:apex)?\s*"
-            r"(public|global|private|protected)?\s*class\s+\w+\s*\{.*?```"
-        )
+
+        if et == "class":
+            fenced_pattern = class_fenced
+        elif et == "trigger":
+            fenced_pattern = trigger_fenced
         elif et == "apex":
-            # Any Apex trigger or class inside a fenced block
-            fenced_pattern = (
-            r"(?s)```(?:apex)?\s*"
-            r"(?:(?:public|global|private|protected)?\s*class\s+\w+\s*\{.*?"
-            r"|trigger\s+\w+\s+on\s+\w+\s*\([\w\s,]+\)\s*\{.*?```)"
-        )
+            # Either an Apex class or trigger inside a fenced block
+            fenced_pattern = f"{class_fenced}|{trigger_fenced}"
         else:
             # Generic fenced block fallback
             fenced_pattern = r"(?s)```.+?```"
 
         has_fenced = re.search(fenced_pattern, text, re.IGNORECASE) is not None
 
-        # --- 2) If no fenced code found, try non‑fenced patterns for Apex types ---
+        # --- 2) If no fenced code found and we're dealing with Apex, try non‑fenced patterns ---
         has_unfenced = False
-        if not has_fenced:
-            if et in ("class", "apex"):
-                class_pattern_unfenced = (
-                r"(?s)\b(public|global|private|protected)?\s*class\s+\w+\s*\{.*?\}"
+        if not has_fenced and et in ("class", "trigger", "apex"):
+            class_unfenced = (
+                r"(?s)\b(?:public|global|private|protected)?\s*class\s+\w+\s*\{.*?\}"
             )
-            if re.search(class_pattern_unfenced, text, re.IGNORECASE):
-                has_unfenced = True
-
-            if et in ("trigger", "apex"):
-                trigger_pattern_unfenced = (
+            trigger_unfenced = (
                 r"(?s)\btrigger\s+\w+\s+on\s+\w+\s*\([\w\s,]+\)\s*\{.*?\}"
             )
-            if re.search(trigger_pattern_unfenced, text, re.IGNORECASE):
-                has_unfenced = True or has_unfenced
 
-        # For completely generic / other types, you could also allow any '{...}' block,
-        # but that may be too permissive depending on your strictness needs.
+            if et in ("class", "apex") and re.search(class_unfenced, text, re.IGNORECASE):
+                has_unfenced = True
+
+            if et in ("trigger", "apex") and re.search(trigger_unfenced, text, re.IGNORECASE):
+                has_unfenced = True
 
         if not (has_fenced or has_unfenced):
+            # Tailor error message for Apex vs generic
+            if et in ("class", "trigger", "apex"):
+                detail = "in a fenced code block or as plain Apex"
+            else:
+                detail = "in a fenced code block"
+
             error_msg = (
-            f"Expected {expected_type} code snippet "
-            f"{'in a fenced code block or as plain Apex' if et in ('class', 'trigger', 'apex') else 'in a fenced code block'} "
-            f"not found in the AI response."
-        )
-        logger.error(error_msg)
-        raise AssertionError(error_msg)
+                f"Expected {expected_type} code snippet {detail} "
+                f"not found in the AI response."
+            )
+            logger.error(error_msg)
+            raise AssertionError(error_msg)
 
         logger.info(
-        f"Code snippet for {expected_type} successfully identified in the response text "
-        f"(fenced={has_fenced}, unfenced={has_unfenced})."
-    )
+            f"Code snippet for {expected_type} successfully identified in the response text "
+            f"(fenced={has_fenced}, unfenced={has_unfenced})."
+        )
         return True
 
-    def validate_context_retention(self, previous_user_message, previous_ai_response,
-                                   current_user_message, current_ai_response,
-                                   expected_references):
+    def validate_context_retention(
+        self,
+        previous_user_message,
+        previous_ai_response,
+        current_user_message,
+        current_ai_response,
+        expected_references,
+    ):
         """
         Validate that the AI retains important context across turns.
         :param previous_user_message: Prior user message content
@@ -253,12 +258,17 @@ class custom_keywords:
             raise AssertionError(error_msg)
 
         if not isinstance(current_ai_response, str):
-            error_msg = f"Current AI response must be a string. Got type: {type(current_ai_response)}"
+            error_msg = (
+                "Current AI response must be a string. "
+                f"Got type: {type(current_ai_response)}"
+            )
             logger.error(error_msg)
             raise AssertionError(error_msg)
 
         if not expected_references:
-            logger.info("No expected context references provided; skipping context retention validation.")
+            logger.info(
+                "No expected context references provided; skipping context retention validation."
+            )
             return True
 
         resp_lower = current_ai_response.lower()
