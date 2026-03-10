@@ -12,21 +12,17 @@ ${LAST_AI_MESSAGE}          xpath=(//div[contains(@class, 'ai-message')])[last()
 
 *** Keywords ***
 Setup Browser And Login
-    [Documentation]    Opens browser and handles authentication only.
+    [Documentation]    Opens browser and handles Copado email authentication.
     Open Browser       about:blank    chrome    --guest
     GoTo               ${BASE_URL}
-    VerifyText         Log in to Copado
-    ClickText          Continue with Google
-    VerifyText         Sign in
-    TypeText           Email or phone    ${C_EMAIL}
-    ClickText          Next
-    VerifyText         Connecting to
-    TypeText           Username          ${C_EMAIL}
-    TypeSecret         Password          ${C_PASSWORD}
-    ClickText          Sign In
-    VerifyText         Okta Verify
-    ClickText          Send Push         sleep=60s
-    VerifyText         Welcome           timeout=60s
+
+    ClickText          Continue with email
+    VerifyText         Email            timeout=10s
+    TypeText           Email            ${C_EMAIL}       
+    TypeSecret         Password         ${C_PASSWORD}
+    ClickText          LOGIN
+    
+    VerifyText         Welcome          timeout=15s
 
 Ensure Test Workspace Exists
     [Arguments]        ${name}
