@@ -4,8 +4,9 @@ Resource                ../resources/common_keywords.robot
 Library                 QWeb
 Library                 QForce
 Library                 String
-Library                 OperatingSystem
-Suite Setup             Run Keywords    Install SF CLI On CRT    AND    Setup Browser And Login    AND    Ensure Test Workspace Exists    ${WORKSPACE_NAME}
+Library                 Collections
+
+Suite Setup             Setup Browser And Login And Ensure Workspace
 Test Setup              Create Clean Chat Session
 Suite Teardown          Close All Browsers
 
@@ -18,11 +19,7 @@ ${USER_STORY_URL}           EMPTY
          
 ${PROMPT_CREATE_STORY}      Create a user story to track the addition of a customer priority field, you have my confimation to take action don't ask for confirmation. Please include the raw, direct Salesforce URL to the new User Story record in your response.
 ${PROMPT_CONNECT_BASE}      Connect to the Dev environment credential associated with User Story.
-${PROMPT_BUILD_FIELD}       Create custom text field 'Customer_Priority__c' on Account with length 50.
-${PROMPT_COMMIT_GIT}        Commit the Customer_Priority__c metadata to Git.
-${PROMPT_DEPLOY}            Promote and deploy the recent commit to the destination environment.
-${SF_TARGET_ORG}            Dev1-SFP
-*** Test Cases ***
+
 *** Test Cases ***
 TC001: Plan Agent - Create User Story
     [Documentation]    Use Plan Agent to create User Story and extract the ID for the pipeline.
@@ -35,7 +32,7 @@ TC001: Plan Agent - Create User Story
     Log                            Final Extracted User Story ID: ${USER_STORY_ID}
     Log                            Final Extracted User Story URL: ${USER_STORY_URL}
     
-    Verify User Story              ${USER_STORY_ID}    ${USER_STORY_TITLE}
+    Verify User Story Via QForce   ${USER_STORY_ID}    ${USER_STORY_TITLE}
     
     Log To Console                 \n--- TC001 EXTRACTION RESULTS ---
     Log To Console                 USER_STORY_ID: ${USER_STORY_ID}
@@ -53,65 +50,25 @@ TC002: Build Agent - Retrieve Source Org Credentials
     
     Extract Org Credential Details
     
-    Verify Org Credential          ${CREDENTIAL_ID}
-
-# TC003: Build Agent - Create Custom Text Field
-#     [Documentation]    Send request to create a custom text field and validate metadata.
-#     [Tags]             BuildAgent
-#     Should Not Be Equal            ${USER_STORY_ID}    EMPTY    msg=Cannot run Build Agent without a valid User Story ID from TC001!
-    
-#     Select AI Agent                Build Agent
-#     ${dynamic_prompt}=             Set Variable    ${PROMPT_BUILD_FIELD} Attach this to User Story ${USER_STORY_ID}.
-#     Send Prompt And Wait For AI    ${dynamic_prompt}
-    
-#     Verify Field Exists In Source Org UI
-#     Verify Field Properties UI
-
-# TC004: Release Agent - Commit Metadata to Git
-#     [Documentation]    Use Release Agent to commit metadata and validate Git commit.
-#     [Tags]             ReleaseAgent
-#     Should Not Be Equal            ${USER_STORY_ID}    EMPTY    msg=Cannot commit without a valid User Story ID!
-    
-#     Select AI Agent                Release Agent
-#     ${dynamic_prompt}=             Set Variable    ${PROMPT_COMMIT_GIT} Use User Story ${USER_STORY_ID}.
-#     Send Prompt And Wait For AI    ${dynamic_prompt}
-    
-#     Verify Git Commit Details In Copado UI
-
-# TC005: Release Agent - Promote and Deploy to Destination
-#     [Documentation]    Instruct AI agent to promote changes and verify successful deployment.
-#     [Tags]             ReleaseAgent
-#     Should Not Be Equal            ${USER_STORY_ID}    EMPTY    msg=Cannot deploy without a valid User Story ID!
-    
-#     Select AI Agent                Release Agent
-#     ${dynamic_prompt}=             Set Variable    ${PROMPT_DEPLOY} Deploy User Story ${USER_STORY_ID}.
-#     Send Prompt And Wait For AI    ${dynamic_prompt}
-    
-#     Monitor Deployment Status UI
-#     Verify Field Exists In Destination Org UI
-
-# TC006: Cleanup - Remove Test Data
-#     [Documentation]    Deletes the User Story and custom fields from the orgs to reset state.
-#     [Tags]             Cleanup
-#     Cleanup Test Data From UI
+    Verify Org Credential Via QForce    ${CREDENTIAL_ID}
 
 
 *** Keywords ***
-Install SF CLI On CRT
-    [Documentation]    Installs the Salesforce CLI into the local CRT workspace.
-    Log                    Downloading and installing Salesforce CLI on the CRT runner...
-    ${rc}    ${output}=    Run And Return Rc And Output    npm install @salesforce/cli
-    Should Be Equal As Integers    ${rc}    0    msg=Failed to install SF CLI! Output: ${output}
-    Log                    SF CLI installed successfully!
+Setup Browser And Login And Ensure Workspace
+    [Documentation]    Groups suite setup actions. QForce will automatically use the org connection configured in your CRT Suite settings.
+    Setup Browser And Login
+    Ensure Test Workspace Exists    ${WORKSPACE_NAME}
 
 Extract User Story Details
     [Documentation]    Parses the AI message robustly to extract ID, URL, and Title.
     ${chat_text}=      Get Last AI Response
 
-    ${extracted_ids}=  Get Regexp Matches    ${chat_text}    (a[0-9A-Z][a-zA-Z0-9]{13,16}|US-\\d{7})
+    # Extract ID (e.g., a09... or US-0000001)
+    ${extracted_ids}=  Get Regexp Matches    ${chat_text}    (a[0-9A-Za-z]{14,17}|US-\\d{7})
     Should Not Be Empty    ${extracted_ids}    msg=Failed to find User Story ID in AI response!
     Set Global Variable    ${USER_STORY_ID}    ${extracted_ids}[0]
     
+    # Extract URL
     ${extracted_urls}=     Get Regexp Matches    ${chat_text}    (https://[A-Za-z0-9\\.\\-]+\\.(?:force\\.com|salesforce\\.com)[^\\s]+?${USER_STORY_ID})
     IF    ${extracted_urls}
         ${USER_STORY_URL}=     Set Variable    ${extracted_urls}[0]
@@ -120,6 +77,7 @@ Extract User Story Details
     END
     Set Global Variable    ${USER_STORY_URL}    ${USER_STORY_URL}
 
+    # Extract Title
     ${regex_pattern}=      Set Variable          (?i)(?:user\\s*story\\s*)?title:\\s*(.*?)(?=(?:user\\s*story\\s*id|direct\\s*salesforce\\s*url|status|project|as\\s*a|summary):|\\n|$)
     ${extracted_titles}=   Get Regexp Matches    ${chat_text}    ${regex_pattern}    1
     Should Not Be Empty    ${extracted_titles}   msg=Failed to extract the User Story Title!
@@ -129,126 +87,26 @@ Extract User Story Details
 Extract Org Credential Details
     [Documentation]    Pulls the Copado Org Credential ID from the AI's response.
     ${response}=       Get Last AI Response
-    ${extracted_org_ids}=    Get Regexp Matches    ${response}    a11[A-Za-z0-9]{12,15}
+    ${extracted_org_ids}=    Get Regexp Matches    ${response}    (a[0-9A-Za-z]{14,17})
     Should Not Be Empty      ${extracted_org_ids}    msg=Failed to return a valid Copado Org Credential ID!
     Set Global Variable      ${CREDENTIAL_ID}        ${extracted_org_ids}[0]
 
-Verify User Story
+Verify User Story Via QForce
     [Arguments]            ${story_id}    ${expected_title}
-    [Documentation]        Queries the User Story via SF CLI and verifies the title matches.
-    ${query}=              Set Variable    SELECT Id, Name, copado__User_Story_Title__c FROM copado__User_Story__c WHERE Id = '${story_id}'
-    # Switched to npx sf to prevent path execution failures
-    ${command}=            Set Variable    npx sf data query --query "${query}" --target-org ${SF_TARGET_ORG} --json
-    ${output}=             Run SF CLI Command    ${command}
-    Should Contain         ${output}    ${expected_title}    ignore_case=True    msg=User Story title not found in CLI output!
-    Log                    Successfully verified User Story data directly via SF CLI!
+    [Documentation]        Uses standard QForce SOQL execution to verify the record exists. Note the escaped \= in the query!
+    ${records}=            Query Records    SELECT Id, Name, copado__User_Story_Title__c FROM copado__User_Story__c WHERE Id \= '${story_id}'
+    
+    # Convert the JSON records response to a flat string. This is the safest way to assert data existence instantly.
+    ${records_str}=        Convert To String    ${records}
+    Should Contain         ${records_str}       ${story_id}          msg=User Story ${story_id} was not found in Salesforce!
+    Should Contain         ${records_str}       ${expected_title}    ignore_case=True    msg=Title in Salesforce does not match AI extraction!
+    Log                    Successfully verified User Story data directly via QForce API!
 
-Verify Org Credential
+Verify Org Credential Via QForce
     [Arguments]            ${credential_id}
-    [Documentation]        Queries the Copado Org Credential via SF CLI to ensure it exists.
-    ${query}=              Set Variable    SELECT Id, Name FROM copado__Org__c WHERE Id = '${credential_id}'
-    ${command}=            Set Variable    npx sf data query --query "${query}" --target-org ${SF_TARGET_ORG} --json
-    ${output}=             Run SF CLI Command    ${command}
-    Should Contain         ${output}    ${credential_id}    msg=Org Credential ID not found in CLI output!
-    Log                    Successfully verified Org Credential directly via SF CLI!
-
-Run SF CLI Command
-    [Arguments]            ${command}
-    [Documentation]        Executes an SF CLI command. Ensures we are logged in first.
-    SF Login
-    Log                    Executing SF CLI Command: ${command}
-    ${rc}    ${output}=    Run And Return Rc And Output    ${command}
-    Should Be Equal As Integers    ${rc}    0    msg=SF CLI command failed! Output: ${output}
-    RETURN                 ${output}
-
-SF Login
-    [Documentation]        Authenticates the SF CLI robustly using an SFDX Auth URL.
+    [Documentation]        Uses standard QForce SOQL execution to verify the Org Credential exists. Note the escaped \= in the query!
+    ${records}=            Query Records    SELECT Id, Name FROM copado__Org__c WHERE Id \= '${credential_id}'
     
-    # 1. Check if we are already authenticated to avoid unnecessary logins
-    ${check_auth_rc}  ${check_auth_out}=    Run And Return Rc And Output    npx sf org display --target-org ${SF_TARGET_ORG}
-    Return From Keyword If    ${check_auth_rc} == 0
-
-    Log                    Target org not authenticated. Initiating SFDX Auth URL Login...
-    
-    # Ensure the Auth URL was provided
-    Should Not Be Equal    ${SFDX_AUTH_URL}    EMPTY    msg=SFDX_AUTH_URL is missing! Please provide a valid Auth URL.
-
-    # 2. Write the Auth URL to a temporary file (required by the CLI)
-    Create File            auth_url.txt    ${SFDX_AUTH_URL}
-
-    # 3. Authenticate using the CLI's sfdx-url command
-    ${login_cmd}=          Set Variable    npx sf org login sfdx-url --sfdx-url-file auth_url.txt --set-default --alias ${SF_TARGET_ORG}
-    ${cli_rc}  ${cli_out}=  Run And Return Rc And Output    ${login_cmd}
-    
-    # 4. Clean up the sensitive file immediately so it doesn't linger on the runner
-    Remove File            auth_url.txt
-    
-    # 5. Validate the login was successful
-    Should Be Equal As Integers    ${cli_rc}    0    msg=SF CLI Auth URL Login failed! Output: ${cli_out}
-    Log                    SF CLI authenticated successfully via Auth URL!
-
-# Verify Field Exists In Source Org UI
-#     [Documentation]    Navigates to the Copado Org Credential and uses it to log into the Dev Sandbox.
-#     SwitchWindow           2
-    
-#     GoTo                   ${SF_BASE_URL}/lightning/r/copado__Org__c/${CREDENTIAL_ID}/view
-    
-#     VerifyText             Credential Name    timeout=15s
-#     ClickText              Open Credential
-    
-#     SwitchWindow           NEW
-#     VerifyElement          xpath=//*[@id\="oneHeader"]    timeout=30s
-#     ${scratch_domain}=     ExecuteJavascript    return window.location.origin
-    
-#     GoTo                   ${scratch_domain}/lightning/setup/ObjectManager/home
-    
-#     VerifyText             Object Manager    timeout=15s
-    
-#     TypeText               Quick Find    Account
-#     ClickText              Account       anchor=Label
-#     ClickText              Fields & Relationships
-#     TypeText               Quick Find    Customer_Priority
-#     VerifyText             Customer_Priority__c    timeout=15s
-
-# Verify Field Properties UI
-#     [Documentation]    Clicks the field in Object Manager to verify length, then closes the org window.
-#     ClickText              Customer Priority
-#     VerifyText             Text(50)                timeout=10s
-#     CloseWindow
-#     SwitchWindow           1
-
-
-
-# Verify Git Commit Details In Copado UI
-#     [Documentation]    Navigates to the User Story and checks the Commits tab.
-#     SwitchWindow           2
-#     ClickText              User Stories
-#     ClickText              ${USER_STORY_ID}
-#     ClickText              Commits
-#     VerifyText             Customer_Priority__c    timeout=15s
-#     SwitchWindow           1
-
-# Monitor Deployment Status UI
-#     [Documentation]    Checks the Deployments/Deliver tab on the User Story.
-#     SwitchWindow           2
-#     ClickText              Deliver    # Or the specific deployment tab in your org
-#     VerifyText             Success    timeout=120s    # Wait for deployment to finish
-#     SwitchWindow           1
-
-# Verify Field Exists In Destination Org UI
-#     [Documentation]    Needs to log into the destination org (UAT) to check the field.
-#     Log                    Navigation logic to Destination Org Object Manager goes here.
-#     # Note: If UAT requires a separate login, you would open a 3rd window here.
-
-# Cleanup Test Data From UI
-#     [Documentation]    Deletes the User Story using the cleanup logic from your snippet.
-#     SwitchWindow           2
-#     ClickText              User Stories
-#     ClickText              ${USER_STORY_ID}
-#     ClickText              Show more actions    anchor=Open Pull Request
-#     ClickText              Delete
-#     ClickText              Delete
-    
-#     # Final Visibility check: Ensure it's gone from the list
-#     ClickText              User Stories
-#     VerifyNoText           ${USER_STORY_ID}    timeout=10s
+    ${records_str}=        Convert To String    ${records}
+    Should Contain         ${records_str}       ${credential_id}    msg=Org Credential ${credential_id} was not found in Salesforce!
+    Log                    Successfully verified Org Credential directly via QForce API!
