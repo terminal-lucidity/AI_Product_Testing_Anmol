@@ -7,8 +7,15 @@ Library                 QForce
 Library                 String
 Library                 Collections
 
-Suite Setup             Setup Browser And Login And Ensure Workspace
+Suite Setup             Setup Browser And Login
 Test Setup              Create Clean Chat Session
 Suite Teardown          Close All Browsers
+
+*** Test Cases ***
+TC001: just print
+    [Documentation]     just printing
+    Log To Console      ${MyTable.humidity}
+
+
 
 
