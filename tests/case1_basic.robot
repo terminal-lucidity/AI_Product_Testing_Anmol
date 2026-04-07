@@ -37,7 +37,6 @@ TC003: Delete Workspace And Cleanup
     [Tags]             testgen    workspace_delete
     ClickText          ${WORKSPACE_NAME}
     ClickText          Workspace Details
-    Log To Console     ${MyTable.humidity}
     ClickElement       xpath=//*[contains(text(), 'Edit Workspace')]/ancestor-or-self::button/following-sibling::button
     
     ClickText          Delete Workspace
